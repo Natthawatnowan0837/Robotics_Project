@@ -6,19 +6,15 @@
 - Intel RealSense D435i (Depth Camera)
 
 ---
-## 🔹 การติดตั้ง ROS2 Humble บน Ubuntu 22.04
+## Install ROS2 Humble บน Ubuntu 22.04
 สามารถทำตามคู่มือจาก ROS2 ได้ที่:  
 [ROS2 Humble Ubuntu Development Setup](https://docs.ros.org/en/humble/Installation/Alternatives/Ubuntu-Development-Setup.html)
 
 ---
-## การติดตั้ง Intel RealSense SDK (librealsense) บน Ubuntu 22.04
+## Install Intel RealSense SDK (librealsense) บน Ubuntu 22.04
 
-### 1. Gitclone librealsens for open Camera
+### 1. Git clone librealsens for open Camera
 ```bash
-sudo apt update
-sudo apt install -y git cmake build-essential libssl-dev libusb-1.0-0-dev pkg-config \
-libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev
-
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense
 git checkout v2.55.1
