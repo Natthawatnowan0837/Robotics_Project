@@ -11,7 +11,7 @@
 [ROS2 Humble Ubuntu Development Setup](https://docs.ros.org/en/humble/Installation/Alternatives/Ubuntu-Development-Setup.html)
 
 ---
-## Install Intel RealSense SDK (librealsense) บน Ubuntu 22.04
+## Intel RealSense D435i 
 
 ### 1. Git clone librealsens for open Camera
 ```bash
@@ -25,4 +25,11 @@ make -j$(nproc)
 sudo make install
 
 realsense-viewer # ทดสอบเปิด Software กล้อง
+
+### 2. Git clone librealsens for open Camera
+```bash
+
+sudo apt install ros-humble-realsense2-camera
+
+ros2 launch realsense2_camera rs_launch.py   enable_depth:=true   enable_color:=true   enable_gyro:=true   enable_accel:=true   unite_imu_method:=linear_interpolation   pointcloud.enable:=true
 
