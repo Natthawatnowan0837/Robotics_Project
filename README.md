@@ -17,6 +17,7 @@ mkdir src
 ```
 ### Intel RealSense D435i 
 ```bash
+cd ~/Documents
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense
 git checkout v2.55.1
