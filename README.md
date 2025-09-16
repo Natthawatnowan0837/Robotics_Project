@@ -26,6 +26,13 @@ mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 sudo make install
+sudo cp 99-realsense-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+cd ~/Documents/librealsense/config/
+ls 99-realsense-libusb.rules
+sudo cp 99-realsense-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
 
 realsense-viewer # ทดสอบเปิด Software กล้อง
 
@@ -38,6 +45,9 @@ ros2 launch realsense2_camera rs_launch.py \
   enable_accel:=true \
   unite_imu_method:=linear_interpolation \
   pointcloud.enable:=true # Run Node
+
+
+
 ```
 
 ### Orb_slam3
@@ -47,5 +57,8 @@ cd Project/src
 
 git clone https://github.com/Mechazo11/ros2_orb_slam3 \ 
 #and follow ReadMe
+
+sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0
+
 
 ```
