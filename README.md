@@ -15,7 +15,6 @@ sudo apt update
 sudo apt install -y git cmake build-essential libssl-dev libusb-1.0-0-dev pkg-config \
 libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev
 
--การใช้งาน Intel Realsens d435i
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense
 git checkout v2.55.1
@@ -25,4 +24,4 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 sudo make install
 
-realsense-viewer # ทดสอบ
+realsense-viewer # ทดสอบเปิด Software กล้อง
