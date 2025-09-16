@@ -12,8 +12,9 @@
 [ROS2 Humble Ubuntu Development Setup](https://docs.ros.org/en/humble/Installation/Alternatives/Ubuntu-Development-Setup.html)
 
 ### Create Working Space
+```bash
 mkdir src
-
+```
 ### Intel RealSense D435i 
 ```bash
 git clone https://github.com/IntelRealSense/librealsense.git
@@ -43,8 +44,7 @@ ros2 launch realsense2_camera rs_launch.py \
 ```bash
 cd Project/src
 
-git clone https://github.com/Mechazo11/ros2_orb_slam3 
-
-and follow ReadMe
+git clone https://github.com/Mechazo11/ros2_orb_slam3 \ 
+#and follow ReadMe
 
 ```
