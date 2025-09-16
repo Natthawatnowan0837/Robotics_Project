@@ -6,6 +6,9 @@
 - Intel RealSense D435i (Depth Camera)
 
 ---
+## 🔹 การติดตั้ง Ros2 Humble on Ubuntu 22.04 
+```bash
+https://docs.ros.org/en/humble/Installation/Alternatives/Ubuntu-Development-Setup.html
 
 ## 🔹 การติดตั้ง Intel RealSense SDK (librealsense) บน Ubuntu 22.04
 
@@ -25,3 +28,4 @@ make -j$(nproc)
 sudo make install
 
 realsense-viewer # ทดสอบเปิด Software กล้อง
+
