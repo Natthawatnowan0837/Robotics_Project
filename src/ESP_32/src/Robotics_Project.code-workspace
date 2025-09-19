@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../.."
+		},
+		{
+			"name": "Sensor_test",
+			"path": "../../../Sensor_test"
+		},
+		{
+			"name": "ESP_32",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
