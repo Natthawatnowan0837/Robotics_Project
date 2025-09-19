@@ -50,6 +50,7 @@ MonocularMode::~MonocularMode()
 {
     if (pAgent)
     {
+        pAgent->SaveMap("map_d435i");
         pAgent->Shutdown();
     }
     pass;

@@ -61,3 +61,15 @@ Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -3.5
 Viewer.ViewpointF: 500.0
+
+#--------------------------------------------------------------------------------------------
+# System Parameters (เพิ่มมาเพื่อ Merge)
+#--------------------------------------------------------------------------------------------
+System.LoadAtlasFromFile: 0      # 0 = เริ่มใหม่ทุกครั้ง, 1 = โหลด atlas เดิม
+System.SaveAtlasToFile: 1        # 1 = เซฟ atlas หลัง shutdown
+System.AtlasFile: "map_d435i"
+
+LoopClosing: 1
+MapReuse: 1
+Merge: 1
+
