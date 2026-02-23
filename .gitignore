@@ -1,0 +1,10 @@
+build/
+install/
+log/
+dataset_stair/
+*.so
+*.o
+*.bin
+*.bag
+*.pgm
+*.yaml

@@ -1,0 +1,41 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
+
+from launch import LaunchDescription
+from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
+from launch_ros.actions import Node
+import xacro  
+
+def generate_launch_description():
+
+    use_sim_time = LaunchConfiguration('use_sim_time')
+
+    # 1. ระบุพาธไปยังไฟล์ model.urdf.xacro
+    pkg_path = os.path.join(get_package_share_directory('my_control'))
+    xacro_file = os.path.join(pkg_path, 'models', 'my_stair_robot', 'robot.urdf.xacro')
+
+    # 2. ใช้ xacro process ไฟล์ แทนการใช้ open().read() แบบเดิม
+    # วิธีนี้จะทำการรวมไฟล์ที่ include และคำนวณค่าตัวแปรต่างๆ ให้เสร็จสรรพ
+    robot_description_config = xacro.process_file(xacro_file).toxml()
+    
+    # 3. กำหนดค่า Parameters
+    params = {'robot_description': robot_description_config, 'use_sim_time': use_sim_time}
+    
+    node_robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        output='screen',
+        parameters=[params]
+    )
+
+    # Launch! 
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='true',
+            description='Use sim time if true'),
+
+        node_robot_state_publisher
+    ])

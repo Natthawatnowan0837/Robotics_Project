@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "MS5611",
+			"path": "../../../Documents/PlatformIO/Projects/MS5611"
+		},
+		{
+			"name": "MS5611_1",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
