@@ -1,4 +1,9 @@
 <!-- Mapping Loading -->
+'''bash
+link Note_RTABmap
+https://drive.google.com/file/d/1GEH9HMNtmL5sdaD5H6LYM-nz9-8M4cDB/view?pli=1
+
+'''
 
 ros2 launch rtabmap_launch rtabmap.launch.py \
     rtabmap_args:="--delete_db_on_start" \
