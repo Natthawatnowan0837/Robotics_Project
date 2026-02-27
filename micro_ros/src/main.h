@@ -14,14 +14,19 @@
 #define WheelmotorRight_R 5
 #define WheelmotorRight_L 17
 
+#define PlatforLeft_R 13
+#define PlatforLeft_L 12
+#define PlatforRight_R  27
+#define PlatforRight_L 14
+
 // --- Macros ---
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
 // --- แชร์ฟังก์ชันและตัวแปร (Extern) ---
 void error_loop();
-extern rcl_publisher_t pub_vel_out,pub_setpoint;
-extern std_msgs__msg__Float32MultiArray msg_vel_out,msg_setpoint;
+extern rcl_publisher_t pub_vel_out,pub_setpoint,pub_platform_vel_out;
+extern std_msgs__msg__Float32MultiArray msg_vel_out,msg_setpoint,msg_platform_vel_out;
 extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไฟล์อื่นมองเห็นตัวแปรเวลา
 
 
@@ -30,4 +35,5 @@ extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไ�
 // void init_PID();
 // void pid_motor(float linear , float angular, float enc_left, float enc_right);
 void pwm(float linear, float angular);
+void pwm_platform(float linear_x);
 #endif

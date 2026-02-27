@@ -31,10 +31,10 @@ class VoiceProcessor(Node):
         self.cli = self.create_client(Sendposition, 'move_robot_service')
 
         # รอให้ Server (หุ่นยนต์) ออนไลน์
-        while not self.cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service /move_robot_service not available, waiting...')
+        # while not self.cli.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('Service /move_robot_service not available, waiting...')
 
-        self.get_logger().info("Voice Processor Ready (Service Mode with Z-Floor)")
+        # self.get_logger().info("Voice Processor Ready (Service Mode with Z-Floor)")
 
     def respond_room(self, action, room):
         if action and room in rooms_dict:

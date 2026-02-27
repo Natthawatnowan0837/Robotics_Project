@@ -29,20 +29,31 @@ class StairDataset(Dataset):
         return torch.from_numpy(point_cloud).float(), self.labels[idx]
 
 def load_dataset(root_dir="dataset_stair"):
-    classes = {"downstairs": 0, "upstairs": 1, "others": 2}
+    # คลาส 0 = ไม่ใช่บันไดขาขึ้น (Negative), คลาส 1 = บันไดขาขึ้น (Positive)
+    target_classes = {"upstairs": 1}
+    other_classes = ["downstairs", "others"]
+    
     files = []
     labels = []
 
-    for class_name, label in classes.items():
+    # โหลดเป้าหมาย (Upstairs)
+    for class_name, label in target_classes.items():
         class_path = os.path.join(root_dir, class_name)
-        if not os.path.exists(class_path):
-            print(f"Warning: Folder {class_path} not found!")
-            continue
-            
         class_files = glob.glob(os.path.join(class_path, "*.npy"))
         files.extend(class_files)
         labels.extend([label] * len(class_files))
-        print(f"Loaded {len(class_files)} files for class '{class_name}'")
+        print(f"Target: Loaded {len(class_files)} files for 'Upstairs'")
+
+    # โหลดอย่างอื่นทั้งหมดเป็นคลาส 0
+    other_count = 0
+    for class_name in other_classes:
+        class_path = os.path.join(root_dir, class_name)
+        if os.path.exists(class_path):
+            class_files = glob.glob(os.path.join(class_path, "*.npy"))
+            files.extend(class_files)
+            labels.extend([0] * len(class_files))
+            other_count += len(class_files)
+    print(f"Background: Loaded {other_count} files for 'Others/Downstairs'")
 
     return files, labels
 
@@ -83,7 +94,7 @@ class TNet(nn.Module):
         return x
 
 class PointNet(nn.Module):
-    def __init__(self, classes=3):
+    def __init__(self, classes=2):
         super(PointNet, self).__init__()
         self.stn = TNet(k=3)
         self.conv1 = nn.Conv1d(3, 64, 1)
@@ -167,62 +178,70 @@ def plot_confusion_matrix(model, val_loader, device, class_names):
 def main():
     # Configuration
     BATCH_SIZE = 32
-    EPOCHS = 50
-    LR = 0.0001
+    EPOCHS = 60
+    LR = 0.0005 # เพิ่ม Learning Rate เล็กน้อยเพื่อให้เรียนรู้เร็วขึ้น
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # 1. Prepare Data
     files, labels = load_dataset()
-    if not files:
-        print("Error: No data found.")
-    else:
-        X_train, X_val, y_train, y_val = train_test_split(files, labels, test_size=0.3, random_state=42)
+    if not files: return
+
+    X_train, X_val, y_train, y_val = train_test_split(files, labels, test_size=0.2, random_state=42)
+    
+    # คำนวณ Weight เพื่อแก้ปัญหา Imbalance (ถ้า Others เยอะกว่า Upstairs)
+    class_sample_count = np.array([len(labels) - sum(labels), sum(labels)])
+    weight = 1. / class_sample_count
+    samples_weight = torch.from_numpy(weight).float().to(device)
+
+    train_loader = DataLoader(StairDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(StairDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
+
+    model = PointNet(classes=2).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=LR)
+    
+    # ใช้ Weighted NLLLoss เพื่อเน้นการตรวจจับบันไดให้แม่นยำขึ้น
+    criterion = nn.NLLLoss(weight=samples_weight) 
+    
+    best_recall = 0 # สำหรับ Detection การ Recall (หาบันไดเจอ) สำคัญมาก
+
+    for epoch in range(EPOCHS):
+        model.train()
+        train_loss = 0
+        for data, target in train_loader:
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output, _ = model(data)
+            loss = criterion(output, target.long())
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        # Validation
+        model.eval()
+        val_correct = 0
+        upstairs_found = 0
+        total_upstairs = sum(y_val)
         
-        train_loader = DataLoader(StairDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(StairDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
-
-        # 2. Setup Model
-        model = PointNet(classes=3).to(device)
-        optimizer = optim.Adam(model.parameters(), lr=LR)
-        criterion = nn.NLLLoss()
-        best_acc = 0
-
-        # 3. Training Loop
-        for epoch in range(EPOCHS):
-            model.train()
-            total_loss, correct, total = 0, 0, 0
-            for data, target in train_loader:
+        with torch.no_grad():
+            for data, target in val_loader:
                 data, target = data.to(device), target.to(device)
-                optimizer.zero_grad()
                 output, _ = model(data)
-                loss = criterion(output, target.long())
-                loss.backward()
-                optimizer.step()
-                
-                total_loss += loss.item()
-                correct += (output.argmax(1) == target).sum().item()
-                total += target.size(0)
+                preds = output.argmax(1)
+                val_correct += (preds == target).sum().item()
+                # นับว่าตรวจเจอ Upstairs จริงๆ เท่าไหร่
+                upstairs_found += ((preds == 1) & (target == 1)).sum().item()
+        
+        recall = (upstairs_found / total_upstairs) if total_upstairs > 0 else 0
+        val_acc = 100. * val_correct / len(y_val)
+        
+        print(f"Epoch {epoch+1:02d} | Loss: {train_loss/len(train_loader):.4f} | Acc: {val_acc:.2f}% | Recall: {recall:.2f}")
 
-            # Validation
-            model.eval()
-            val_correct = 0
-            with torch.no_grad():
-                for data, target in val_loader:
-                    data, target = data.to(device), target.to(device)
-                    output, _ = model(data)
-                    val_correct += (output.argmax(1) == target).sum().item()
-            
-            val_acc = 100. * val_correct / len(X_val)
-            print(f"Epoch {epoch+1:02d} | Loss: {total_loss/len(train_loader):.4f} | Val Acc: {val_acc:.2f}%")
+        # บันทึกโมเดลที่ Recall ดีที่สุด (ตรวจเจอไม่ค่อยพลาด)
+        if recall > best_recall:
+            best_recall = recall
+            torch.save(model.state_dict(), "stair_detector_best.pth")
 
-            if val_acc > best_acc:
-                best_acc = val_acc
-                torch.save(model.state_dict(), "pointnet_stairs4.pth")
-
-        # 4. Final Evaluation
-        print(f"\nTraining Complete. Best Accuracy: {best_acc:.2f}%")
-        model.load_state_dict(torch.load("pointnet_stairs4.pth"))
-        plot_confusion_matrix(model, val_loader, device, ["downstairs", "upstairs", "others"])
+    print(f"\nDetection Training Complete. Best Recall: {best_recall:.2f}")
+    plot_confusion_matrix(model, val_loader, device, ["Others", "Upstairs"])
 
 if __name__ == '__main__':
     main()

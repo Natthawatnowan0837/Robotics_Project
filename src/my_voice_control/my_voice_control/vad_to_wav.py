@@ -11,11 +11,11 @@ from collections import deque
 
 class VoiceCaptureNode(Node):
     def __init__(self):
-        super().__init__('record_voice')
+        super().__init__('vad_to_wav')
         
         # --- Config ---
-        self.SILENCE_THRESHOLD = 0.8     
-        self.SILENCE_DURATION_LIMIT = 0.7 
+        self.SILENCE_THRESHOLD = 0.7   
+        self.SILENCE_DURATION_LIMIT = 0.75
         self.MIN_SPEECH_DURATION = 0.5    
         self.PRE_RECORD_SECONDS = 0.5     
         self.OUTPUT_FILENAME = "my_command.wav"

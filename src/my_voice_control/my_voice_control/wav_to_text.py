@@ -24,7 +24,7 @@ STATE_LISTENING_COMMAND = 1
 
 class VoiceCommandProcessor(Node):
     def __init__(self):
-        super().__init__('voice_to_text')
+        super().__init__('wave_to_text')
 
         # --- Config ---
         self.AUDIO_FILE = "my_command.wav"
@@ -127,54 +127,79 @@ class VoiceCommandProcessor(Node):
             return audio_data
 
     def process_audio(self):
-        try:
-            self.get_logger().info(f"🎧 Processing... (State: {self.current_state})")
-            
-            # อ่านไฟล์เสียง
-            audio, sample_rate = sf.read(self.AUDIO_FILE)
+            try:
+                self.get_logger().info(f"🎧 Processing... (State: {self.current_state})")
+                
+                # อ่านไฟล์เสียง
+                audio, sample_rate = sf.read(self.AUDIO_FILE)
 
-            # [NEW] เรียกใช้ Filter ก่อนส่งเข้า Whisper
-            audio = self.apply_filters(audio, sample_rate)
+                # [NEW] เรียกใช้ Filter ก่อนส่งเข้า Whisper
+                # audio = self.apply_filters(audio, sample_rate)
 
-            # Whisper Processing
-            input_features = self.processor(
-                audio, sampling_rate=sample_rate, return_tensors="pt"
-            ).input_features.to(self.device)
+                # Whisper Processing
+                input_features = self.processor(
+                    audio, sampling_rate=sample_rate, return_tensors="pt"
+                ).input_features.to(self.device)
 
-            with torch.no_grad():
-                predicted_ids = self.model.generate(input_features)
-            
-            raw_text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
-            print("\n" + "="*50)
-            print(f"🗣️  User said (Filtered): {raw_text}")
-            print("="*50 + "\n")
+                # --- แก้ไขส่วนนี้เพื่อลบ Warnings ---
+                with torch.no_grad():
+                    predicted_ids = self.model.generate(
+                        input_features,
+                        language='th',        # ระบุภาษาไทย (ลด Warning เรื่อง Language Detection)
+                        task='transcribe',    # ระบุ Task (ลด Warning เรื่อง forced_decoder_ids)
+                        return_timestamps=True # ช่วยเพิ่มความเสถียรในการประมวลผล
+                    )
+                # ----------------------------------
+                
+                raw_text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+                
+                # บางครั้ง Whisper อาจคืนค่าเป็นช่องว่างหรือสัญลักษณ์แปลกๆ กรณีเสียงเงียบ
+                raw_text = raw_text.strip()
+                
+                print("\n" + "="*50, flush=True) # เพิ่ม flush=True
+                print(f"🗣️  User said (Raw): {raw_text}", flush=True)
+                print("="*50 + "\n", flush=True)
 
-            if self.current_state == STATE_WAITING_WAKEWORD:
-                self.handle_wake_word(raw_text)
-            elif self.current_state == STATE_LISTENING_COMMAND:
-                self.handle_command(raw_text)
+                if not raw_text:
+                    self.get_logger().info("🔇 No speech detected after filtering.")
+                    return
 
-        except Exception as e:
-            self.get_logger().error(f"Error processing: {e}")
-        finally:
-            if os.path.exists(self.AUDIO_FILE):
-                os.remove(self.AUDIO_FILE)
+                if self.current_state == STATE_WAITING_WAKEWORD:
+                    self.handle_wake_word(raw_text)
+                elif self.current_state == STATE_LISTENING_COMMAND:
+                    self.handle_command(raw_text)
 
+            except Exception as e:
+                self.get_logger().error(f"Error processing: {e}")
+            finally:
+                if os.path.exists(self.AUDIO_FILE):
+                    os.remove(self.AUDIO_FILE)
     def handle_wake_word(self, text):
-        is_called = False
-        for kw in self.keywords_active:
-            score = fuzz.partial_ratio(kw, text)
-            if score >= self.MATCH_THRESHOLD:
-                is_called = True
-                break
-        
-        if is_called:
-            self.speak("ครับผม ว่าไงครับ")
-            self.current_state = STATE_LISTENING_COMMAND
-            self.last_interaction_time = time.time()
-        else:
-            print("💤 Ignored")
-
+            self.get_logger().info(f"🔍 Checking Wake Word for: '{text}'")
+            
+            # 1. Fast Match: เช็คตรงๆ ก่อน (ไวมาก)
+            is_called = False
+            for kw in self.keywords_active:
+                if kw in text:
+                    self.get_logger().info(f"✨ Fast Match found: {kw}")
+                    is_called = True
+                    break
+            
+            # 2. Fuzzy Match: ถ้าไม่เจอตรงๆ ค่อยใช้คะแนนความคล้าย
+            if not is_called:
+                for kw in self.keywords_active:
+                    score = fuzz.partial_ratio(kw, text)
+                    if score >= self.MATCH_THRESHOLD:
+                        is_called = True
+                        break
+            
+            # 3. ถ้าเจอ Wake Word ให้เปลี่ยนสถานะ
+            if is_called:
+                self.speak("ครับผม ว่าไงครับ")
+                self.current_state = STATE_LISTENING_COMMAND
+                self.last_interaction_time = time.time()
+            else:
+                print("💤 Ignored", flush=True)
     def handle_command(self, text):
         text_lower = text.lower()
         self.last_interaction_time = time.time() 

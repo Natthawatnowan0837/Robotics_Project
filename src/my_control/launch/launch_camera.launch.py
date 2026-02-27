@@ -43,32 +43,8 @@ def generate_launch_description():
         arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
     )
 
-    database_full_path = os.path.expanduser('~/.ros/rtabmap.db')
-
-    # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
-    rtabmap = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
-        )]),
-        launch_arguments={
-            'rtabmap_args': '--delete_db_on_start',
-            'database_path': database_full_path,         # ระบุที่เก็บแผนที่
-            'rgb_topic': '/camera/camera/color/image_raw',
-            'depth_topic': '/camera/camera/depth/image_rect_raw',
-            'camera_info_topic': '/camera/camera/color/camera_info',
-            'frame_id': 'camera_link',
-            'approx_sync': 'true',
-            'wait_imu_to_init': 'true',
-            'imu_topic': '/rtabmap/imu',
-            'qos': '1',
-            'rviz': 'true'
-        }.items()
-    )
-
     return LaunchDescription([
         realsense,
         imu_filter,
         static_tf,
-        # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
-        TimerAction(period=3.0, actions=[rtabmap]),
     ])

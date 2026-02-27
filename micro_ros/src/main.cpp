@@ -16,19 +16,20 @@ rcl_node_t node;
 rclc_executor_t executor;
 
 // Subscription & Publishers
-rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg;
-rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint;
+rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg ,sub_platform_vel;
+rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint ,pub_platform_vel_out;
 
 // Messages
-std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint;
+std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint , msg_platform_vel_out;
 std_msgs__msg__Float32 msg_rpsl, msg_rpsr, msg_degl, msg_degr;
-geometry_msgs__msg__Twist msg_cmd_vel;
+geometry_msgs__msg__Twist msg_cmd_vel , msg_platform_vel;
 
 // จอง Memory สำหรับรับข้อมูล Array (ต้องจองไว้ล่วงหน้า)
 static float rps_buffer[5]; 
 static float arm_buffer[2];
 static float vel_out_buffer[2];
 static float setpoint_buffer[2];
+static float platform_vel_out_buffer[2];
 
 float current_linear = 0.0, current_angular = 0.0;
 float rps_l = 0.0, rps_r = 0.0;
@@ -57,6 +58,16 @@ void vel_callback(const void * msgin) {
 
   // pid_motor(current_linear, current_angular, rps_l, rps_r);
   pwm(current_linear, current_angular);
+}
+
+void platform_vel_callback(const void * msgin) {
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  
+  last_cmd_vel_time = millis();
+  
+  current_linear  = msg->linear.x;
+  // pid_motor(current_linear, current_angular, rps_l, rps_r);
+  pwm_platform(current_linear);
 }
 
 // void check_cmd_timeout() {
@@ -142,19 +153,27 @@ void setup() {
   msg_setpoint.data.capacity = 2;
   msg_setpoint.data.size = 2;
 
+  msg_platform_vel_out.data.data = platform_vel_out_buffer;
+  msg_platform_vel_out.data.capacity = 2;
+  msg_platform_vel_out.data.size = 2;
+
   // --- 2. Init Publishers (สำหรับ Debug) ---
  
   RCCHECK(rclc_publisher_init_default(&pub_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_velocity_output"));
   RCCHECK(rclc_publisher_init_default(&pub_setpoint, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_setpoint"));
+  RCCHECK(rclc_publisher_init_default(&pub_platform_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "platform_velocity_output"));
+  
   // --- 3. Init Subscriber ---
   RCCHECK(rclc_subscription_init_default(&sub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
   RCCHECK(rclc_subscription_init_default(&sub_arm_deg, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));  
   RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
+  RCCHECK(rclc_subscription_init_default(&sub_platform_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "platform_cmd_vel"));
   // --- 4. Init Executor (1 handle สำหรับ 1 subscriber) ---
-  RCCHECK(rclc_executor_init(&executor, &support.context, 3, &allocator));
+  RCCHECK(rclc_executor_init(&executor, &support.context, 4, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor_rps, &msg_sub_rps, &rps_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_deg, &msg_arm_deg, &arm_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &vel_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_platform_vel, &msg_platform_vel, &platform_vel_callback, ON_NEW_DATA));
   // เปิดไฟค้างไว้เมื่อพร้อมทำงาน
   digitalWrite(LED_PIN, HIGH);
 }
