@@ -2,17 +2,14 @@
 # -*- coding: utf-8 -*-
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist  # เปลี่ยนจาก Vector3 เป็น Twist
+from geometry_msgs.msg import Twist
 import pygame
 
 class XboxControllerNode(Node):
     def __init__(self):
         super().__init__('xbox_controller_node')
         
-        # เปลี่ยน Message Type เป็น Twist
         self.move_pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        
-        # Multiplier จะกลายเป็นตัวคูณความเร็วสูงสุด (Max Speed)
         self.multiplier = 1.0  
         
         pygame.init()
@@ -23,46 +20,47 @@ class XboxControllerNode(Node):
             
         self.joy = pygame.joystick.Joystick(0)
         self.joy.init()
-        self.get_logger().info(f"Xbox Ready (Twist Mode) | Max Speed Multiplier: {self.multiplier}")
+        self.get_logger().info(f"Xbox Ready (Twist Analog Mode) | Max Speed Multiplier: {self.multiplier}")
 
-        self.timer = self.create_timer(0.1, self.controller_loop)
+        self.timer = self.create_timer(0.05, self.controller_loop)
 
     def controller_loop(self):
-            pygame.event.pump()
-            msg = Twist() 
+        pygame.event.pump()
+        msg = Twist()
 
-            # --- Multiplier Logic ---
-            if self.joy.get_button(0): # A
-                self.multiplier = max(0.0, self.multiplier - 0.1)
-                self.get_logger().info(f"Max Speed: {self.multiplier:.1f}")
-            elif self.joy.get_button(3): # X
-                self.multiplier = min(2.0, self.multiplier + 0.1)
-                self.get_logger().info(f"Max Speed: {self.multiplier:.1f}")
-            elif self.joy.get_button(1): # B
-                self.multiplier = 0.0
-                self.get_logger().info("Speed Reset to 0.0")
+        # --- ส่วนของ Multiplier Logic (เพิ่มกลับเข้าไปให้) ---
+        if self.joy.get_button(0): # A: ลดความเร็ว
+            self.multiplier = max(0.1, self.multiplier - 0.1)
+            self.get_logger().info(f"Speed Multiplier: {self.multiplier:.1f}")
+        elif self.joy.get_button(3): # Y หรือ X (ตาม Index): เพิ่มความเร็ว
+            self.multiplier = min(2.0, self.multiplier + 0.1)
+            self.get_logger().info(f"Speed Multiplier: {self.multiplier:.1f}")
 
-            # --- Get D-pad state ---
-            dpad = self.joy.get_hat(0)
-            
-            # กำหนดค่าพื้นฐานเป็น 0
+        # 1. อ่านค่าดิบจาก Analog
+        raw_linear = -self.joy.get_axis(1) 
+        raw_angular = -self.joy.get_axis(0)
+
+        # 2. ตั้งค่า Deadzone 
+        deadzone = 0.15
+
+        # ตรวจสอบแกน Linear
+        if abs(raw_linear) < deadzone:
             msg.linear.x = 0.0
-            msg.angular.z = 0.0
+        else:
+            msg.linear.x = raw_linear * 0.5 * self.multiplier
 
-            if dpad != (0, 0):
-                if dpad == (0, 1):     # Forward
-                    msg.linear.x = 0.3 * self.multiplier
-                elif dpad == (0, -1):  # Backward
-                    msg.linear.x = -0.3 * self.multiplier
-                elif dpad == (-1, 0):  # Turn Left
-                    msg.angular.z = 1.0 * self.multiplier
-                elif dpad == (1, 0):   # Turn Right
-                    msg.angular.z = -1.0 * self.multiplier
-                
-                self.get_logger().info(f"Moving: L={msg.linear.x:.2f}, A={msg.angular.z:.2f}")
-            
-            # ส่งข้อมูลเสมอ (เพื่อให้ Failsafe ใน ESP32 ไม่ทำงาน)
-            self.move_pub.publish(msg)
+        # ตรวจสอบแกน Angular
+        if abs(raw_angular) < deadzone:
+            msg.angular.z = 0.0
+        else:
+            msg.angular.z = raw_angular * 1.5 * self.multiplier
+
+        # 3. ส่งข้อมูล (Publish)
+        self.move_pub.publish(msg)
+
+        # 4. แสดงผลเพื่อเช็คใน Terminal
+        if msg.linear.x != 0.0 or msg.angular.z != 0.0:
+            self.get_logger().info(f"Moving: L={msg.linear.x:.2f}, A={msg.angular.z:.2f}")
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,91 +1,42 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <AS5600.h>
-#include <MPU6050_light.h>
 #include <micro_ros_arduino.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <std_msgs/msg/float32.h>
-#include <std_msgs/msg/string.h>
 #include <std_msgs/msg/float32_multi_array.h>
-#include <geometry_msgs/msg/vector3.h>
 #include <geometry_msgs/msg/twist.h>
-#include <rcutils/logging_macros.h>
-
-
-#include "main.h"
-// --- Configuration ---
-#define TCA_ADDR 0x70
-#define SDA_PIN 21
-#define SCL_PIN 22
 #define LED_PIN 2
-
-AS5600 as5600(&Wire);
-MPU6050 mpu(Wire);
-
-// --- State Variables ---
-bool imu_online[2] = {false, false};       
-bool encoder_online[4] = {false, false, false, false}; 
-unsigned long last_time_motor = 0;
-unsigned long lastMsgTime = 0;
-float last_angle_ml = 0; 
-float last_angle_mr = 0; 
-float raw_rps_l = 0.0; // ประกาศไว้ตรงนี้เพื่อให้ทุกฟังก์ชันมองเห็น
-float raw_rps_r = 0.0;
-
-float lpf_alpha = 0.2;
-float enc_left = 0.0;
-float enc_right = 0.0;
-
-float window_l[3] = {0, 0, 0};
-float window_r[3] = {0, 0, 0};
-
-// ฟังก์ชันจิ๋วสำหรับหาค่ากลางของเลข 3 ตัว
-float get_median3(float new_val, float* window) {
-    window[2] = window[1];
-    window[1] = window[0];
-    window[0] = new_val;
-
-    float a = window[0];
-    float b = window[1];
-    float c = window[2];
-
-    // คืนค่ากลาง (Median)
-    if ((a <= b && b <= c) || (c <= b && b <= a)) return b;
-    if ((b <= a && a <= c) || (c <= a && a <= b)) return a;
-    return c;
-}
-
+#include "main.h"
+// --- Micro-ROS objects ---
 rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
 rclc_executor_t executor;
-rcl_timer_t timer;
 
-// --- Publishers ---
-rcl_publisher_t pub_encoder_motorLeft, pub_encoder_motorRight, pub_encoder_armLeft, pub_encoder_armRight;
-rcl_publisher_t pub_motor_rps; // ยุบรวมเหลือตัวเดียว
+// Subscription & Publishers
+rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg;
+rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint;
 
-rcl_publisher_t pub_imu_body, pub_imu_plateform;
-rcl_publisher_t pub_vel_out ,pub_setpoint;
+// Messages
+std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint;
+std_msgs__msg__Float32 msg_rpsl, msg_rpsr, msg_degl, msg_degr;
+geometry_msgs__msg__Twist msg_cmd_vel;
 
-// ตัวเก็บ Message สำหรับตอนจะส่ง
-
-
-// --- Subscribers ---
-rcl_subscription_t sub_cmd_vel;
-
-// --- Messages Storage ---
-std_msgs__msg__Float32 msg_encoder_motorLeft, msg_encoder_motorRight, msg_encoder_armLeft, msg_encoder_armRight;
-std_msgs__msg__Float32MultiArray msg_motor_rps , msg_vel_out,msg_setpoint; // ตัวเก็บข้อมูล Array
-geometry_msgs__msg__Vector3 msg_imu_body, msg_imu_plateform ;
-geometry_msgs__msg__Twist msg_move_cmd;
-
+// จอง Memory สำหรับรับข้อมูล Array (ต้องจองไว้ล่วงหน้า)
+static float rps_buffer[5]; 
+static float arm_buffer[2];
 static float vel_out_buffer[2];
 static float setpoint_buffer[2];
-// --- Helper Functions ---
 
+float current_linear = 0.0, current_angular = 0.0;
+float rps_l = 0.0, rps_r = 0.0;
+float deg_l = 0.0, deg_r = 0.0;
+
+unsigned long last_cmd_vel_time = 0; // เก็บเวลาที่ได้รับข้อความล่าสุด
+const unsigned long CMD_VEL_TIMEOUT = 500; // ตัดการทำงานหากไม่ได้รับค่าเกิน 0.5 วินาที
+// --- Error Handling ---
 void error_loop() {
   while (1) {
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
@@ -93,214 +44,124 @@ void error_loop() {
   }
 }
 
-void tcaSelect(uint8_t i) {
-  if (i > 7) return;
-  Wire.beginTransmission(TCA_ADDR);
-  Wire.write(1 << i);
-  Wire.endTransmission();
-}
+#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
+#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-bool checkI2CAddress(uint8_t addr) {
-  Wire.beginTransmission(addr);
-  return (Wire.endTransmission() == 0);
-}
-
-// --- Callback Functions ---
 void vel_callback(const void * msgin) {
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
   
-  float linear_vel = msg->linear.x;
-  float angular_vel = msg->angular.z;
-
-  // อัปเดตค่าความเร็วจาก Encoder ที่ได้จากฟังก์ชัน Encoder_motor()
-  enc_left = raw_rps_l; 
-  enc_right = raw_rps_r;
-
-  // เรียกใช้ Robot_move เพื่อคำนวณ IK และ PID
-  Robot_move(linear_vel, angular_vel, enc_left, enc_right);
+  last_cmd_vel_time = millis();
   
-  lastMsgTime = millis();
-}
-// --- Sensor Reading Functions ---
+  current_linear  = msg->linear.x;
+  current_angular = msg->angular.z;
 
-void read_IMU() {
-  if (imu_online[0]) {
-    tcaSelect(0); mpu.update();
-    msg_imu_body.x = mpu.getAngleX(); msg_imu_body.y = mpu.getAngleY(); msg_imu_body.z = mpu.getAngleZ();
-    RCSOFTCHECK(rcl_publish(&pub_imu_body, &msg_imu_body, NULL));
-  }
-  if (imu_online[1]) {
-    tcaSelect(1); mpu.update();
-    msg_imu_plateform.x = mpu.getAngleX(); msg_imu_plateform.y = mpu.getAngleY(); msg_imu_plateform.z = mpu.getAngleZ();
-    RCSOFTCHECK(rcl_publish(&pub_imu_plateform, &msg_imu_plateform, NULL));
-  }
-}
-void init_motor_rps_msg() {
-    static float data_buffer[2]; // สร้างถังพักข้อมูลขนาด 2 ช่อง
-    msg_motor_rps.data.capacity = 2;
-    msg_motor_rps.data.size = 2;
-    msg_motor_rps.data.data = data_buffer;
+  // pid_motor(current_linear, current_angular, rps_l, rps_r);
+  pwm(current_linear, current_angular);
 }
 
-void init_debug_msgs() {
-    // เตรียม Memory สำหรับ Velocity Output
-    msg_vel_out.data.capacity = 2;
-    msg_vel_out.data.size = 2;
-    msg_vel_out.data.data = vel_out_buffer;
+// void check_cmd_timeout() {
+//   if (millis() - last_cmd_vel_time > CMD_VEL_TIMEOUT) {
+//     // หากเกินเวลาที่กำหนด ให้สั่งหยุดมอเตอร์เพื่อความปลอดภัย
+//     pwm(0.0, 0.0); 
+//   }
+// }
 
-    // เตรียม Memory สำหรับ Setpoint
-    msg_setpoint.data.capacity = 2;
-    msg_setpoint.data.size = 2;
-    msg_setpoint.data.data = setpoint_buffer;
-}
+// --- Callback Function ---
+void rps_callback(const void * msgin) {
+  // เมื่อมีข้อมูลเข้า ให้ไฟสถานะเปลี่ยนค่า (Toggle)
+  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 
-void Encoder_motor() {
-  unsigned long current_time = micros();
-  float dt = (float)(current_time - last_time_motor) / 1000000.0;
-  if (dt < 0.01) return;
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  
+  // ตรวจสอบว่ามีข้อมูลส่งมาอย่างน้อย 2 ค่า
+  if (msg->data.size >= 2) {
+    // 1. ดึงค่าออกมาและปัดเศษให้เหลือ 2 ตำแหน่งทันที
+    // สูตร: round(ค่า * 100) / 100
+    rps_l = roundf(msg->data.data[0] * 100.0f) / 100.0f;
+    rps_r = roundf(msg->data.data[1] * 100.0f) / 100.0f;
 
-  const float RAW_TO_DEG = 360.0 / 4096.0;
+    // 2. จัดการเรื่อง Deadzone (ถ้าค่าน้อยมากๆ ให้เป็น 0.00)
+    if (abs(rps_l) < 0.01f) rps_l = 0.00f;
+    if (abs(rps_r) < 0.01f) rps_r = 0.00f;
 
-  // --- Motor Left (Index 0) ---
-  if (encoder_online[0]) {
-    tcaSelect(2);
-    float current_angle = as5600.readAngle() * RAW_TO_DEG;
-    float delta_angle = current_angle - last_angle_ml;
-    if (delta_angle > 180) delta_angle -= 360;
-    else if (delta_angle < -180) delta_angle += 360;
-
-    float raw_rps_l_new = (delta_angle / 360.0) / dt;
-
-    // 1. ผ่าน Median Filter (กำจัด Spike)
-    float median_l = get_median3(raw_rps_l_new, window_l);
-
-    // 2. ผ่าน Low Pass Filter (เกลี่ยให้เนียน)
-    raw_rps_l = (lpf_alpha * median_l) + (1.0 - lpf_alpha) * raw_rps_l;
+    // 3. ส่งค่าออกไปที่ Topic Debug
+    msg_rpsl.data = rps_l;
+    msg_rpsr.data = rps_r;
     
-    if (abs(raw_rps_l) < 0.01) raw_rps_l = 0.0;
-    msg_motor_rps.data.data[0] = raw_rps_l;
-    last_angle_ml = current_angle;
+    RCSOFTCHECK(rcl_publish(&pub_rps_l, &msg_rpsl, NULL));
+    RCSOFTCHECK(rcl_publish(&pub_rps_r, &msg_rpsr, NULL));
   }
+}
 
-  // --- Motor Right (Index 1) ---
-  if (encoder_online[1]) {
-    tcaSelect(3);
-    float current_angle = as5600.readAngle() * RAW_TO_DEG;
-    float delta_angle = current_angle - last_angle_mr;
-    if (delta_angle > 180) delta_angle -= 360;
-    else if (delta_angle < -180) delta_angle += 360;
+void arm_callback(const void * msgin) {
+  // เมื่อมีข้อมูลเข้า ให้ไฟสถานะเปลี่ยนค่า (Toggle)
+  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 
-    float raw_rps_r_new = (delta_angle / 360.0) / dt;
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  
+  // ตรวจสอบว่ามีข้อมูลส่งมาอย่างน้อย 2 ค่า
+  if (msg->data.size >= 2) {
+    // 1. ดึงค่าออกมา
+    deg_l = msg->data.data[0];
+    deg_r = msg->data.data[1];
 
-    // 1. ผ่าน Median Filter
-    float median_r = get_median3(raw_rps_r_new, window_r);
-
-    // 2. ผ่าน Low Pass Filter
-    raw_rps_r = (lpf_alpha * median_r) + (1.0 - lpf_alpha) * raw_rps_r;
+    // 2. ส่งค่าออกไปที่ Topic Debug
+    msg_degl.data = deg_l;
+    msg_degr.data = deg_r;
     
-    if (abs(raw_rps_r) < 0.01) raw_rps_r = 0.0;
-    msg_motor_rps.data.data[1] = raw_rps_r;
-    last_angle_mr = current_angle;
-  }
-
-  RCSOFTCHECK(rcl_publish(&pub_motor_rps, &msg_motor_rps, NULL));
-  last_time_motor = current_time;
-}
-
-void Encoder_arm() {
-  const float RAW_TO_DEG = 360.0 / 4096.0;
-  // Arm Left (CH 4)
-  if (encoder_online[2]) {
-    tcaSelect(4); msg_encoder_armLeft.data = as5600.readAngle() * RAW_TO_DEG;
-    RCSOFTCHECK(rcl_publish(&pub_encoder_armLeft, &msg_encoder_armLeft, NULL));
-  }
-  // Arm Right (CH 5)
-  if (encoder_online[3]) {
-    tcaSelect(5); msg_encoder_armRight.data = as5600.readAngle() * RAW_TO_DEG;
-    RCSOFTCHECK(rcl_publish(&pub_encoder_armRight, &msg_encoder_armRight, NULL));
+    RCSOFTCHECK(rcl_publish(&pub_deg_l, &msg_degl, NULL));
+    RCSOFTCHECK(rcl_publish(&pub_deg_r, &msg_degr, NULL));
   }
 }
-
-void timer_callback(rcl_timer_t *timer, int64_t last_call_time) {
-  RCLC_UNUSED(last_call_time);
-  if (timer != NULL) {
-    read_IMU();      
-    Encoder_motor(); 
-    Encoder_arm();   
-  }
-}
-
-// --- Main Setup ---
 
 void setup() {
-  init_PID();
+  // init_PID();
   pinMode(LED_PIN, OUTPUT);
   set_microros_transports();
-  
-  Wire.begin(SDA_PIN, SCL_PIN);
-  Wire.setClock(400000);
-
-  // Scan Hardware: IMU
-  for (uint8_t i = 0; i <= 1; i++) {
-    tcaSelect(i);
-    if (checkI2CAddress(0x68)) { 
-      if (mpu.begin() == 0) imu_online[i] = true; 
-    }
-  }
-  
-  // Scan Hardware: Encoders
-  for (uint8_t i = 2; i <= 5; i++) {
-    tcaSelect(i);
-    if (checkI2CAddress(0x36)) { 
-      as5600.begin(); 
-      encoder_online[i-2] = true; 
-    }
-  }
-
-  // เตรียมหน่วยความจำสำหรับ MultiArray
-  init_motor_rps_msg();
-  init_debug_msgs();
 
   allocator = rcl_get_default_allocator();
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-  RCCHECK(rclc_node_init_default(&node, "esp32_sensor_node", "", &support));
-
-  // --- Init Publishers ---
   
-  // 1. ยุบรวมล้อซ้าย-ขวาเป็น Topic เดียว (motor_rps_array)
-  RCCHECK(rclc_publisher_init_default(&pub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
+  // ตั้งชื่อ Node ให้ต่างจากตัวแรก
+  RCCHECK(rclc_node_init_default(&node, "esp32_debug_sub_node", "", &support));
 
-  // 2. Publisher อื่นๆ (เหมือนเดิม)
-  RCCHECK(rclc_publisher_init_default(&pub_encoder_armLeft, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "arm_left_deg"));
-  RCCHECK(rclc_publisher_init_default(&pub_encoder_armRight, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "arm_right_deg"));  
-  RCCHECK(rclc_publisher_init_default(&pub_imu_body, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3), "imu_body"));
-  RCCHECK(rclc_publisher_init_default(&pub_imu_plateform, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3), "imu_plateform"));
-  RCCHECK(rclc_publisher_init_default(&pub_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "velocity_feedback"));
-  RCCHECK(rclc_publisher_init_default(&pub_setpoint, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "setpoint"));
+  // --- 1. เตรียม Memory สำหรับ Message ที่จะ Subscribe ---
+  msg_sub_rps.data.data = rps_buffer;
+  msg_sub_rps.data.capacity = 5;
+  msg_sub_rps.data.size = 0;
 
-  // --- Init Subscriber ---
-  RCCHECK(rclc_subscription_init_default(
-    &sub_cmd_vel, 
-    &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), 
-    "cmd_vel"
-  ));
+  msg_arm_deg.data.data = arm_buffer;
+  msg_arm_deg.data.capacity = 2;
+  msg_arm_deg.data.size = 0;
 
-  // --- Init Timer ---
-  // แนะนำปรับเป็น 20ms เพื่อให้ PID ทำงานได้เนียนขึ้น
-  RCCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(20), timer_callback));
-  
-  // --- Init Executor ---
-  // Handles = 1 Timer + 1 Subscription = 2 Handles
-  RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
-  RCCHECK(rclc_executor_add_timer(&executor, &timer));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_move_cmd, &vel_callback, ON_NEW_DATA));
-  
-  digitalWrite(LED_PIN, HIGH); 
-  last_time_motor = millis();
-  lastMsgTime = millis();
+  msg_vel_out.data.data = vel_out_buffer;
+  msg_vel_out.data.capacity = 2;
+  msg_vel_out.data.size = 2;
+
+  msg_setpoint.data.data = setpoint_buffer;
+  msg_setpoint.data.capacity = 2;
+  msg_setpoint.data.size = 2;
+
+  // --- 2. Init Publishers (สำหรับ Debug) ---
+ 
+  RCCHECK(rclc_publisher_init_default(&pub_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_velocity_output"));
+  RCCHECK(rclc_publisher_init_default(&pub_setpoint, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_setpoint"));
+  // --- 3. Init Subscriber ---
+  RCCHECK(rclc_subscription_init_default(&sub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
+  RCCHECK(rclc_subscription_init_default(&sub_arm_deg, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));  
+  RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
+  // --- 4. Init Executor (1 handle สำหรับ 1 subscriber) ---
+  RCCHECK(rclc_executor_init(&executor, &support.context, 3, &allocator));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor_rps, &msg_sub_rps, &rps_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_deg, &msg_arm_deg, &arm_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &vel_callback, ON_NEW_DATA));
+  // เปิดไฟค้างไว้เมื่อพร้อมทำงาน
+  digitalWrite(LED_PIN, HIGH);
 }
-void loop() {
 
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
+void loop() {
+  // check_cmd_timeout();
+  // สั่งให้ Executor ทำงาน
+  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
+
 }

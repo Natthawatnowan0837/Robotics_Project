@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'my_voice_control'
 
@@ -10,23 +12,26 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
+        # เพิ่มไฟล์ Launch เข้าไปในระบบ
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        # ติดตั้งไฟล์ commands.json
         ('share/' + package_name, ['commands.json']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='noone',
     maintainer_email='Natthawatnowan@gmail.com',
-    description='TODO: Package description',
+    description='Voice control with VAD for robot navigation',
     license='Apache-2.0',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'mic_checker = my_voice_control.mic_checking:main',
+            'vad_to_wav = my_voice_control.vad_to_wav:main',
+            'wav_to_text = my_voice_control.wav_to_text:main',
+            'voice_processor = my_voice_control.voice_processor:main',
+            # เพิ่มตัวเลือกเสริมตามไฟล์ที่เห็นในรูป
+            'gui = my_voice_control.gui:main', 
         ],
     },
 )
