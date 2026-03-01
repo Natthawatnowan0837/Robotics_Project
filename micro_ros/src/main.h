@@ -32,8 +32,8 @@ extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไ�
 
 // --- ฟังก์ชันต้นแบบ (Prototypes) ---
 // แก้ไข: เปลี่ยนชื่อพารามิเตอร์ไม่ให้ซ้ำกัน (l กับ r)
-// void init_PID();
-// void pid_motor(float linear , float angular, float enc_left, float enc_right);
-void pwm(float linear, float angular);
-void pwm_platform(float linear_x);
+void init_PID();
+void pid_motor(float linear , float angular, float enc_left, float enc_right);
+// void pwm(float linear, float angular);
+// void pwm_platform(float linear_x);
 #endif

@@ -36,7 +36,7 @@ float rps_l = 0.0, rps_r = 0.0;
 float deg_l = 0.0, deg_r = 0.0;
 
 unsigned long last_cmd_vel_time = 0; // เก็บเวลาที่ได้รับข้อความล่าสุด
-const unsigned long CMD_VEL_TIMEOUT = 500; // ตัดการทำงานหากไม่ได้รับค่าเกิน 0.5 วินาที
+// const unsigned long CMD_VEL_TIMEOUT = 500; // ตัดการทำงานหากไม่ได้รับค่าเกิน 0.5 วินาที
 // --- Error Handling ---
 void error_loop() {
   while (1) {
@@ -56,8 +56,8 @@ void vel_callback(const void * msgin) {
   current_linear  = msg->linear.x;
   current_angular = msg->angular.z;
 
-  // pid_motor(current_linear, current_angular, rps_l, rps_r);
-  pwm(current_linear, current_angular);
+  pid_motor(current_linear, current_angular, rps_l, rps_r);
+  // pwm(current_linear, current_angular);
 }
 
 void platform_vel_callback(const void * msgin) {
@@ -67,7 +67,7 @@ void platform_vel_callback(const void * msgin) {
   
   current_linear  = msg->linear.x;
   // pid_motor(current_linear, current_angular, rps_l, rps_r);
-  pwm_platform(current_linear);
+  // pwm_platform(current_linear);
 }
 
 // void check_cmd_timeout() {
@@ -126,7 +126,7 @@ void arm_callback(const void * msgin) {
 }
 
 void setup() {
-  // init_PID();
+  init_PID();
   pinMode(LED_PIN, OUTPUT);
   set_microros_transports();
 
