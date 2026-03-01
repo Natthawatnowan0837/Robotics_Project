@@ -42,7 +42,7 @@ def generate_launch_description():
     static_transform_publisher = Node(
         package='tf2_ros', 
         executable='static_transform_publisher', 
-        arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'camera_imu_optical_frame', 'camera_link'],
+        arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'chassis_link', 'camera_link'],
         output='screen'
     )
 

@@ -11,7 +11,8 @@ float L_Wheel_vel, L_Wheel_Setpoint, L_Wheel_Input, L_Wheel_Output;
 float R_Wheel_vel, R_Wheel_Setpoint, R_Wheel_Input, R_Wheel_Output;
 
 // ค่า Gain (ปรับตามหุ่นยนต์ของคุณ)
-float Kp = 20, Ki = 0, Kd = 0;
+float L_Kp = 25.0, L_Ki = 0.5, L_Kd = 0.1;
+float R_Kp = 22.0, R_Ki = 0.4, R_Kd = 0.1;
 
 // สร้าง Object สำหรับล้อซ้ายและขวา
 QuickPID L_wheel_PID(&L_Wheel_Input, &L_Wheel_Output, &L_Wheel_Setpoint);
@@ -33,16 +34,17 @@ void Motor_drive(int pinA, int pinB, float speed) {
 }
 
 void init_PID() {
-  // ตั้งค่า Tuning และ Output Limits
-  L_wheel_PID.SetTunings(Kp, Ki, Kd);
-  R_wheel_PID.SetTunings(Kp, Ki, Kd);
+  // ตั้งค่า Tuning แยกกัน
+  L_wheel_PID.SetTunings(L_Kp, L_Ki, L_Kd);
+  R_wheel_PID.SetTunings(R_Kp, R_Ki, R_Kd);
 
+  // ตั้งค่า Output Limits (ปกติจะเท่ากันคือ 0-255 หรือ -255 ถึง 255)
   L_wheel_PID.SetOutputLimits(-255, 255);
   R_wheel_PID.SetOutputLimits(-255, 255);
 
   // เปิดใช้งาน PID
-  L_wheel_PID.SetMode(L_wheel_PID.Control::automatic);
-  R_wheel_PID.SetMode(R_wheel_PID.Control::automatic);
+  L_wheel_PID.SetMode(QuickPID::Control::automatic);
+  R_wheel_PID.SetMode(QuickPID::Control::automatic);
 }
 
 void pid_motor(float linear, float angular, float enc_left, float enc_right) {

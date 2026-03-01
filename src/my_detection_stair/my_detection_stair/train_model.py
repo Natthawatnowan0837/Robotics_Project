@@ -28,7 +28,7 @@ class StairDataset(Dataset):
         point_cloud = point_cloud.transpose(1, 0)
         return torch.from_numpy(point_cloud).float(), self.labels[idx]
 
-def load_dataset(root_dir="dataset_stair"):
+def load_dataset(root_dir="/home/jo/Robotics_Project/dataset_stair"):
     # คลาส 0 = ไม่ใช่บันไดขาขึ้น (Negative), คลาส 1 = บันไดขาขึ้น (Positive)
     target_classes = {"upstairs": 1}
     other_classes = ["downstairs", "others"]
@@ -178,8 +178,8 @@ def plot_confusion_matrix(model, val_loader, device, class_names):
 def main():
     # Configuration
     BATCH_SIZE = 32
-    EPOCHS = 60
-    LR = 0.0005 # เพิ่ม Learning Rate เล็กน้อยเพื่อให้เรียนรู้เร็วขึ้น
+    EPOCHS = 50
+    LR = 0.0001 # เพิ่ม Learning Rate เล็กน้อยเพื่อให้เรียนรู้เร็วขึ้น
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     files, labels = load_dataset()
