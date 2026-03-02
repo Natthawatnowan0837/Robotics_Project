@@ -6,6 +6,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 def generate_launch_description():
+    package_name = 'my_control'
     # 1. กล้อง RealSense
     realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
@@ -18,6 +19,19 @@ def generate_launch_description():
             'enable_sync': 'true',
             'align_depth.enable': 'true'
         }.items()
+    )
+
+    rsp = IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([os.path.join(
+                    get_package_share_directory(package_name), 'launch', 'rsp.launch.py'
+                )]), launch_arguments={'use_sim_time': 'false'}.items()
+    )
+
+    node_joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        parameters=[{'use_sim_time': False}]
     )
 
     # 2. IMU Filter Madgwick
@@ -37,39 +51,44 @@ def generate_launch_description():
     )
 
     # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
-    static_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
-    )
+    # static_tf = Node(
+    #     package='tf2_ros',
+    #     executable='static_transform_publisher',
+    #     arguments=['0.0', '0.0', '0.0', '-1.5708', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
+    # )
 
-    # 4. RTAB-Map (ปรับเป็น Localization และใส่ Database Path)
-    # หมายเหตุ: ใน Python Launch แนะนำให้ใช้ path เต็มแทนเครื่องหมาย ~
     database_full_path = os.path.expanduser('~/.ros/rtabmap.db')
 
+    # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
-            'localization': 'true',                      # เปิดโหมด Localization
+            'localization': 'true', 
             'database_path': database_full_path,         # ระบุที่เก็บแผนที่
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/depth/image_rect_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
-            'frame_id': 'camera_link',
+            'frame_id': 'base_link',
             'approx_sync': 'true',
             'wait_imu_to_init': 'true',
             'imu_topic': '/rtabmap/imu',
             'qos': '1',
-            'rviz': 'true'
+            'rviz': 'true',
+            'compressed': 'false',  # <--- เพิ่มบรรทัดนี้เพื่อปิดการใช้ compressed image
+            'use_sim_time': 'false' # <--- ย้ำอีกครั้งว่าต้องเป็น false สำหรับหุ่นจริง
         }.items()
     )
 
     return LaunchDescription([
         realsense,
+        rsp,
+        node_joint_state_publisher,
         imu_filter,
-        static_tf,
-        # หน่วงเวลา 3 วินาทีเพื่อให้กล้องและ IMU สเถียรก่อนเริ่ม Localization
+        # static_tf,
+        # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
         TimerAction(period=3.0, actions=[rtabmap]),
     ])
+
+    

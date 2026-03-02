@@ -15,6 +15,7 @@ setup(
 
             # ไฟล์ที่อยู่ที่ root ของ maps (เช่น rtabmap.db)
             (os.path.join('share', package_name, 'maps'), glob('maps/*.db')),
+            (os.path.join('share', package_name, 'config'), glob('config/*')),
 
             # ไฟล์ข้างในโฟลเดอร์ floor ต่างๆ
             (os.path.join('share', package_name, 'maps/floor1'), glob('maps/floor1/*')),
@@ -34,6 +35,7 @@ setup(
             
             # อย่าลืมเพิ่มโฟลเดอร์ launch ด้วยนะครับ!
             (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+            (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         ],
     install_requires=['setuptools'],
     zip_safe=True,
