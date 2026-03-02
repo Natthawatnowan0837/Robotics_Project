@@ -50,6 +50,12 @@ def generate_launch_description():
         ]
     )
 
+    # navigation_launch = IncludeLaunchDescription(
+    #             PythonLaunchDescriptionSource([os.path.join(
+    #                 get_package_share_directory(package_name), 'launch', 'navigation_launch.py'
+    #             )]), launch_arguments={'use_sim_time': 'false'}.items()
+    # )
+
     # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
     # static_tf = Node(
     #     package='tf2_ros',

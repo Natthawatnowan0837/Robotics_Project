@@ -50,6 +50,12 @@ def generate_launch_description():
         ]
     )
 
+    # navigation_launch = IncludeLaunchDescription(
+    #             PythonLaunchDescriptionSource([os.path.join(
+    #                 get_package_share_directory(package_name), 'launch', 'navigation_launch.py'
+    #             )]), launch_arguments={'use_sim_time': 'false'}.items()
+    # )
+
     # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
     # static_tf = Node(
     #     package='tf2_ros',
@@ -87,6 +93,7 @@ def generate_launch_description():
         rsp,
         node_joint_state_publisher,
         imu_filter,
+        # navigation_launch,
         # static_tf,
         # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
         TimerAction(period=3.0, actions=[rtabmap]),
