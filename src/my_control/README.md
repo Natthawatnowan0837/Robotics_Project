@@ -1,27 +1,23 @@
-<!-- Mapping Loading -->
+# Robotics Project - Stair Robot with RTAB-Map SLAM
 
-ros2 launch rtabmap_launch rtabmap.launch.py \
-    rtabmap_args:="--delete_db_on_start" \
-    rgb_topic:=/camera/camera/color/image_raw \
-    depth_topic:=/camera/camera/depth/image_rect_raw \
-    camera_info_topic:=/camera/camera/color/camera_info \
-    frame_id:=camera_link \
-    approx_sync:=true \
-    wait_imu_to_init:=true \
-    imu_topic:=/rtabmap/imu \
-    qos:=1 \
-    rviz:=true
+โปรเจกต์หุ่นยนต์เคลื่อนที่ (Stair Robot) โดยใช้ ROS 2 Humble ร่วมกับกล้อง RealSense D435i และ RTAB-Map สำหรับทำ SLAM และสร้างแผนที่ 3D
 
-<!-- Localization -->
-ros2 launch rtabmap_launch rtabmap.launch.py \
-    localization:=true \
-    database_path:="~/.ros/rtabmap.db" \
-    rgb_topic:=/camera/camera/color/image_raw \
-    depth_topic:=/camera/camera/depth/image_rect_raw \
-    camera_info_topic:=/camera/camera/color/camera_info \
-    frame_id:=camera_link \
-    approx_sync:=true \
-    wait_imu_to_init:=true \
-    imu_topic:=/rtabmap/imu \
-    qos:=1 \
-    rviz:=true
+## 🛠 การเตรียมระบบ (Prerequisites)
+
+ก่อนใช้งาน ตรวจสอบให้แน่ใจว่าได้ติดตั้ง Package สำคัญเหล่านี้แล้ว:
+- [ROS 2 Humble](https://docs.ros.org/en/humble/Installation.html)
+- [realsense2_camera](https://github.com/IntelRealSense/realsense-ros)
+- [rtabmap_ros](https://github.com/introlab/rtabmap_ros)
+- [imu_filter_madgwick](https://index.ros.org/p/imu_filter_madgwick/)
+
+## 🚀 ขั้นตอนการติดตั้ง (Installation)
+
+1. สร้าง Workspace และ Clone โปรเจกต์:
+```bash
+mkdir -p ~/Robotics_Project/src
+cd ~/Robotics_Project/src
+# Clone โปรเจกต์หลักของคุณ
+git clone <URL_โปรเจกต์ของคุณ> .
+
+# Clone rtabmap_ros (หากยังไม่มีในเครื่อง)
+git clone [https://github.com/introlab/rtabmap_ros.git](https://github.com/introlab/rtabmap_ros.git)

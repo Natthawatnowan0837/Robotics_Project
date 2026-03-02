@@ -36,15 +36,7 @@ def generate_launch_description():
         ]
     )
 
-    # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
-    static_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
-    )
-
     return LaunchDescription([
         realsense,
         imu_filter,
-        static_tf,
     ])
