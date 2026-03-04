@@ -69,7 +69,7 @@ class XboxControllerNode(Node):
 
         # คำนวณความเร็วการหมุน (Angular Z)
         if abs(raw_angular) > self.deadzone:
-            val_z = raw_angular * self.base_speed * self.multiplier
+            val_z = raw_angular * self.base_speed * self.multiplier * 1.5
             move_msg.angular.z = float(val_z)
         
         self.move_pub.publish(move_msg)

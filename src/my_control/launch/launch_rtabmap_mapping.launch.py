@@ -17,7 +17,13 @@ def generate_launch_description():
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'align_depth.enable': 'true'
+            'align_depth.enable': 'true',
+            'enable_sync': 'true',
+            'depth_module.profile': '640x480x15', # ลดความละเอียดและ FPS (มาตรฐานคือ 30fps ซึ่งหนักไป)
+            'rgb_camera.profile': '640x480x15',    # ลด Resolution ของภาพสี (SLAM ไม่จำเป็นต้องใช้ Full HD)
+            'pointcloud.enable': 'false',          # ปิดการสร้าง Pointcloud จากกล้อง (ให้ RTAB-Map ทำเองจะประหยัดกว่า)
+            'clip_distance': '4.0',                # ตัดข้อมูลที่ไกลเกิน 4 เมตร (ลด Noise และการประมวลผล)
+
         }.items()
     )
 
@@ -85,6 +91,7 @@ def generate_launch_description():
             'compressed': 'false',  # <--- เพิ่มบรรทัดนี้เพื่อปิดการใช้ compressed image
             'use_sim_time': 'false', # <--- ย้ำอีกครั้งว่าต้องเป็น false สำหรับหุ่นจริง
             'wait_for_transform': '1.0',
+            'wait_imu_to_init': 'true'
         }.items()
     )
 

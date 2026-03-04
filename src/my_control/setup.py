@@ -48,6 +48,7 @@ setup(
         'console_scripts': [
             'joystick_control = my_control.xbox_360:main',
             'pid_visualizer = my_control.analysis:main',
+            'rps_to_cmd_vel.py = my_control.rps_to_cmd_vel:main',
         ],
     },
 )
