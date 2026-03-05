@@ -42,8 +42,9 @@ extern std_msgs__msg__Float32MultiArray msg_motor_rps  ,msg_arm_degrees;
 
 extern const int hallPin ;     // ขาที่ต่อกับ Out ของเซนเซอร์
 extern int hallState ;  
-// Prototypes
-float getMedian(float* data, int size);
+// 
+float lowpassFilter(float input, float prev_output, float alpha);
+float medianFilter(float* data, int size);
 void Encoder_motor();
 void Encoder_arm();
 void Gyro();

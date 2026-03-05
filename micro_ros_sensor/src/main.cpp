@@ -14,6 +14,9 @@ std_msgs__msg__Bool msg_hall_effect;
 geometry_msgs__msg__Vector3 msg_imu_body, msg_imu_platform;
 std_msgs__msg__Float32MultiArray msg_motor_rps  ,msg_arm_degrees; 
 
+float motor_data[2] = {0.0f, 0.0f};
+float arm_data[2] = {0.0f, 0.0f};
+bool imu_online[2] = {false, false};
 
 void tcaSelect(uint8_t i) {
     if (i > 7) return;
@@ -46,9 +49,24 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
         RCSOFTCHECK(rcl_publish(&pub_hall_effect, &msg_hall_effect, NULL));
     }
 }
-float motor_data[2] = {0.0f, 0.0f};
-float arm_data[2] = {0.0f, 0.0f};
-bool imu_online[2] = {false, false};
+float lowpassFilter(float input, float prev_output, float alpha) {
+    return (alpha * input) + ((1.0f - alpha) * prev_output);
+}
+
+float medianFilter(float* data, int size) { 
+    float sorted[size]; 
+    memcpy(sorted, data, size * sizeof(float)); 
+    for (int i = 0; i < size-1; i++) { 
+        for (int j = 0; j < size-i-1; j++) { 
+            if (sorted[j] > sorted[j+1]) { 
+                float temp = sorted[j]; 
+                sorted[j] = sorted[j+1]; 
+                sorted[j+1] = temp; 
+            } 
+        } 
+    } 
+    return sorted[size/2]; 
+}
 
 void setup() {
     Serial.begin(115200);

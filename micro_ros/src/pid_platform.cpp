@@ -1,6 +1,16 @@
 #include "main.h"
+// ตัวแปรสำหรับ Platform PID
+float Platform_Setpoint = 0.0; // เป้าหมายคือ 0 องศา
+float Platform_Input;          // ค่าจาก Gyro
+float Platform_Output;         // ค่า PWM ที่จะส่งไปมอเตอร์
 
-void Motor_drive_platform(int pinA, int pinB, float speed) {
+// ค่า Gain สำหรับ Platform (ต้อง Tuning ใหม่)
+float P_Kp = 15.0, P_Ki = 0.0, P_Kd = 0.0; 
+
+QuickPID Platform_PID(&Platform_Input, &Platform_Output, &Platform_Setpoint);
+
+
+void Platform_drive(int pinA, int pinB, float speed) {
   speed = constrain(speed, -255, 255);
   if (speed > 0) {
     analogWrite(pinA, speed);
@@ -14,30 +24,34 @@ void Motor_drive_platform(int pinA, int pinB, float speed) {
   }
 }
 
-void pwm_platform(float linear_x, bool hall_effect ,float gyro_body , float gyro_platform) {
-    // 1. คำนวณ PWM เบื้องต้น (จาก 0.0 - 1.0 เป็น 0 - 255)
-    float target_pwm = linear_x * 255.0f;
+void init_Platform_PID() {
+    Platform_PID.SetTunings(P_Kp, P_Ki, P_Kd);
+    Platform_PID.SetOutputLimits(-255, 255); // Output เป็น PWM
+    Platform_PID.SetMode(Platform_PID.Control::automatic);
+}
 
-    // 2. ตรวจสอบเงื่อนไข Hall Effect (Limit Switch Logic)
-    // ถ้า hall_effect เป็น true และกำลังสั่งให้ค่าติดลบ (ถอยลง/ถอยหลัง)
-    if (hall_effect == true && target_pwm < 0) {
-        target_pwm = 0; // บังคับให้เป็น 0 เพื่อหยุดการเคลื่อนที่ในทิศทางนั้น
+void pid_platform(bool hall_effect, float gyro_platform) {
+    // 1. อัปเดต Input จาก Gyro ที่ผ่าน Filter มาแล้ว
+    Platform_Input = gyro_platform;
+    Platform_PID.Compute();
+    float target_pwm = Platform_Output;
+
+    if (hall_effect && target_pwm < 0) {
+        target_pwm = 0; // หยุดถ้าชน Limit
     }
 
-    // 3. ตรวจสอบ Deadzone (หลังจากเช็ค Limit แล้ว)
-    if (abs(target_pwm) < 13.0f) { // 13/255 ประมาณ 0.05f
-        Motor_drive_platform(PlatforLeft_R, PlatforLeft_L, 0);
-        Motor_drive_platform(PlatforRight_R, PlatforRight_L, 0);
-        return;
+    // 4. ตรวจสอบ Deadzone เพื่อไม่ให้มอเตอร์คราง (Humming) เมื่อใกล้ 0
+    if (abs(target_pwm) < 15.0f) {
+        target_pwm = 0;
     }
 
-    // 4. สั่งงานมอเตอร์ทั้ง 2 ตัว
-    // ทิศทางของ Platform: ตัวหนึ่งหมุนปกติ อีกตัวหมุนย้อน (ตามกลไกของคุณ)
-    Motor_drive_platform(PlatforLeft_R, PlatforLeft_L, target_pwm);
-    Motor_drive_platform(PlatforRight_R, PlatforRight_L, target_pwm * -1.0f);
+    // 5. สั่งงานมอเตอร์ (ใช้ฟังก์ชันเดิมที่คุณเขียนไว้)
+    // หมายเหตุ: เช็คทิศทาง (+/-) ให้ตรงกับหน้างานจริง
+    Platform_drive(PlatforLeft_R, PlatforLeft_L, target_pwm);
+    Platform_drive(PlatforRight_R, PlatforRight_L, target_pwm * -1.0f);
 
-    // 5. ส่งค่ากลับไป ROS เพื่อตรวจสอบ (Debug)
-    msg_platform_vel_out.data.data[0] = target_pwm; 
-    msg_platform_vel_out.data.data[1] = target_pwm * -1.0f; 
-    RCSOFTCHECK(rcl_publish(&pub_platform_vel_out, &msg_platform_vel_out, NULL));
+    // 6. ส่งค่า Debug กลับไป ROS
+    msg_platform_vel_out.data.data[0] = target_pwm;
+    msg_platform_vel_out.data.data[1] = target_pwm * -1.0f;
+    rcl_publish(&pub_platform_vel_out, &msg_platform_vel_out, NULL);
 }

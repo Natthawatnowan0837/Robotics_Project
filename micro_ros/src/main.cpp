@@ -19,20 +19,21 @@ rclc_executor_t executor;
 
 // Subscription & Publishers
 rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg ,sub_platform_vel,sub_hall_effect,
-                    sub_gyro_body,sub_gyro_platform;
-rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint ,pub_platform_vel_out;
+                    sub_gyro_body,sub_gyro_platform,sub_arm_vel;
+rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint ,pub_platform_vel_out ,pub_arm_vel_out;
 
 // Messages
-std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint , msg_platform_vel_out;
+std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint , msg_platform_vel_out ,msg_arm_vel_out;
 std_msgs__msg__Float32 msg_rpsl, msg_rpsr, msg_degl, msg_degr , msg_gyro_body, msg_gyro_platform;
 std_msgs__msg__Bool msg_hall_effect;
-geometry_msgs__msg__Twist msg_cmd_vel , msg_platform_vel;
+geometry_msgs__msg__Twist msg_cmd_vel , msg_platform_vel , msg_arm_vel;
 
 // จอง Memory สำหรับรับข้อมูล Array (ต้องจองไว้ล่วงหน้า)
 static float rps_buffer[5]; 
 static float arm_buffer[2];
-static float vel_out_buffer[2];
 static float setpoint_buffer[2];
+static float vel_out_buffer[2];
+static float arm_vel_out_buffer[2];
 static float platform_vel_out_buffer[2];
 
 float current_linear = 0.0, current_angular = 0.0;
@@ -52,17 +53,7 @@ void error_loop() {
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-void vel_callback(const void * msgin) {
-  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
-  
-  last_cmd_vel_time = millis();
-  
-  current_linear  = msg->linear.x;
-  current_angular = msg->angular.z;
 
-  // pid_motor(current_linear, current_angular, rps_l, rps_r);
-  // pwm_(current_linear, current_angular);
-}
 
 void hall_effect_callback(const void * msgin) {
   // แปลงข้อมูลที่รับเข้ามาให้เป็นชนิด Bool message
@@ -83,27 +74,35 @@ void gyro_body_callback(const void * msgin) {
 void gyro_platform_callback(const void * msgin) {
   const std_msgs__msg__Float32 * msg = (const std_msgs__msg__Float32 *)msgin;
   msg_gyro_platform.data = msg->data; 
+  pid_platform(limited, msg_gyro_platform.data);
 }
 
-
-void platform_vel_callback(const void * msgin) {
+void vel_callback(const void * msgin) {
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
   
   last_cmd_vel_time = millis();
-  current_linear = msg->linear.x;
+  
+  current_linear  = msg->linear.x;
+  current_angular = msg->angular.z;
 
-  // ส่งค่า limited ที่ได้จาก Hall Effect เข้าไปในฟังก์ชันควบคุมมอเตอร์
-  pwm_platform(current_linear, limited, msg_gyro_body.data, msg_gyro_platform.data);
+  // pid_motor(current_linear, current_angular, rps_l, rps_r);
+  pwm_motor(current_linear, current_angular);
 }
 
-// void check_cmd_timeout() {
-//   if (millis() - last_cmd_vel_time > CMD_VEL_TIMEOUT) {
-//     // หากเกินเวลาที่กำหนด ให้สั่งหยุดมอเตอร์เพื่อความปลอดภัย
-//     pwm(0.0, 0.0); 
-//   }
-// }
+void platform_vel_callback(const void * msgin) {
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  last_cmd_vel_time = millis();
+  current_linear = msg->linear.x;
+  pwm_platform(current_linear, limited);
+}
 
-// --- Callback Function ---
+void arm_vel_callback(const void * msgin) {
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  last_cmd_vel_time = millis();
+  float linear_x = msg->linear.x;
+  pwm_arm(linear_x);
+}
+
 void rps_callback(const void * msgin) {
   // เมื่อมีข้อมูลเข้า ให้ไฟสถานะเปลี่ยนค่า (Toggle)
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
@@ -153,6 +152,7 @@ void arm_callback(const void * msgin) {
 
 void setup() {
   // init_PID();
+  init_Platform_PID();
   pinMode(LED_PIN, OUTPUT);
   set_microros_transports();
 
@@ -183,27 +183,35 @@ void setup() {
   msg_platform_vel_out.data.capacity = 2;
   msg_platform_vel_out.data.size = 2;
 
+  msg_arm_vel_out.data.data = arm_vel_out_buffer;
+  msg_arm_vel_out.data.capacity = 2;    
+  msg_arm_vel_out.data.size = 2;
+
   // --- 2. Init Publishers (สำหรับ Debug) ---
  
   RCCHECK(rclc_publisher_init_default(&pub_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_velocity_output"));
   RCCHECK(rclc_publisher_init_default(&pub_setpoint, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_setpoint"));
   RCCHECK(rclc_publisher_init_default(&pub_platform_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "platform_velocity_output"));
-  
+  RCCHECK(rclc_publisher_init_default(&pub_arm_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_velocity_output"));
+
   // --- 3. Init Subscriber ---
   RCCHECK(rclc_subscription_init_default(&sub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
   RCCHECK(rclc_subscription_init_default(&sub_arm_deg, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));  
   RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
   RCCHECK(rclc_subscription_init_default(&sub_platform_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "platform_cmd_vel"));
+  RCCHECK(rclc_subscription_init_default(&sub_arm_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "arm_cmd_vel"));
   RCCHECK(rclc_subscription_init_default(&sub_hall_effect, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "hall_effect"));
   RCCHECK(rclc_subscription_init_default(&sub_gyro_body, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "gyro_body"));
   RCCHECK(rclc_subscription_init_default(&sub_gyro_platform, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "gyro_platform"));
+  
   // เปิดไฟค้างไว้เมื่อพร้อมทำงาน
   
-  RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
+  RCCHECK(rclc_executor_init(&executor, &support.context, 8, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor_rps, &msg_sub_rps, &rps_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_deg, &msg_arm_deg, &arm_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &vel_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_platform_vel, &msg_platform_vel, &platform_vel_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_vel, &msg_arm_vel, &arm_vel_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_hall_effect, &msg_hall_effect, &hall_effect_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_gyro_body, &msg_gyro_body, &gyro_body_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_gyro_platform, &msg_gyro_platform, &gyro_platform_callback, ON_NEW_DATA));

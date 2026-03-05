@@ -79,4 +79,3 @@ void pid_motor(float linear, float angular, float enc_left, float enc_right) {
   RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
   RCSOFTCHECK(rcl_publish(&pub_setpoint, &msg_setpoint, NULL));
 }
-

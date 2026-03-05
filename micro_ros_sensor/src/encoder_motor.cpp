@@ -10,20 +10,7 @@ bool encoder_online[2] = {true, true};
 // สร้าง Object as5600_motor ให้ตรงกับที่ main.cpp เรียกใช้
 AS5600 as5600_motor(&Wire); 
 
-float getMedian(float* data, int size) { 
-    float sorted[size]; 
-    memcpy(sorted, data, size * sizeof(float)); 
-    for (int i = 0; i < size-1; i++) { 
-        for (int j = 0; j < size-i-1; j++) { 
-            if (sorted[j] > sorted[j+1]) { 
-                float temp = sorted[j]; 
-                sorted[j] = sorted[j+1]; 
-                sorted[j+1] = temp; 
-            } 
-        } 
-    } 
-    return sorted[size/2]; 
-}
+
 
 void Encoder_motor() {
     unsigned long current_time = micros();
@@ -48,7 +35,7 @@ void Encoder_motor() {
     // Median + Alpha Filter
     for (int i = MEDIAN_SIZE - 1; i > 0; i--) buffer_l[i] = buffer_l[i - 1];
     buffer_l[0] = raw_rps_l;
-    filtered_rps_l = (alpha * getMedian(buffer_l, MEDIAN_SIZE)) + ((1.0 - alpha) * filtered_rps_l);
+    filtered_rps_l = (alpha * medianFilter(buffer_l, MEDIAN_SIZE)) + ((1.0 - alpha) * filtered_rps_l);
     
     // --- ล้อขวา (Channel 3) ---
     tcaSelect(3);
@@ -62,7 +49,7 @@ void Encoder_motor() {
 
     for (int i = MEDIAN_SIZE - 1; i > 0; i--) buffer_r[i] = buffer_r[i - 1];
     buffer_r[0] = raw_rps_r;
-    filtered_rps_r = (alpha * getMedian(buffer_r, MEDIAN_SIZE)) + ((1.0 - alpha) * filtered_rps_r);
+    filtered_rps_r = (alpha * medianFilter(buffer_r, MEDIAN_SIZE)) + ((1.0 - alpha) * filtered_rps_r);
 
     // --- การปัดทศนิยม 2 ตำแหน่ง และ Deadzone ---
     float out_l = (abs(filtered_rps_l) < 0.02) ? 0.00f : roundf(filtered_rps_l * 100.0f) / 100.0f;
