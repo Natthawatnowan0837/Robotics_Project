@@ -19,6 +19,14 @@
 #define PlatformRight_R  27
 #define PlatformRight_L 14
 
+<<<<<<< HEAD
+=======
+#define ArmLeft_R 26
+#define ArmLeft_L 25
+#define ArmRight_R 32
+#define ArmRight_L 33
+
+>>>>>>> 3a2769cef5d954242e8a95c652b967375eee4e62
 // --- Macros ---
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
@@ -32,8 +40,20 @@ extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไ�
 
 // --- ฟังก์ชันต้นแบบ (Prototypes) ---
 // แก้ไข: เปลี่ยนชื่อพารามิเตอร์ไม่ให้ซ้ำกัน (l กับ r)
+<<<<<<< HEAD
 void init_PID();
 void pid_motor(float linear , float angular, float enc_left, float enc_right);
 // void pwm(float linear, float angular);
 // void pwm_platform(float linear_x);
 #endif
+=======
+// void init_PID();
+// void pid_motor(float linear , float angular, float enc_left, float enc_right);
+void pwm_motor(float linear, float angular);
+void pwm_platform(float current_linear, bool limited);
+void pwm_arm(float linear_x);
+
+void init_Platform_PID();
+void pid_platform(bool hall_effect, float gyro_platform);
+#endif
+>>>>>>> 3a2769cef5d954242e8a95c652b967375eee4e62
