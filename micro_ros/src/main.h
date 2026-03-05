@@ -39,5 +39,5 @@ extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไ�
 void init_PID();
 void pid_motor(float linear , float angular, float enc_left, float enc_right);
 // void pwm(float linear, float angular);
-// void pwm_platform(float linear_x);
+void pwm_platform(bool hall_effect_triggered, float platform_linear);
 #endif

@@ -7,6 +7,7 @@
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/float32_multi_array.h>
 #include <geometry_msgs/msg/twist.h>
+#include <std_msgs/msg/bool.h>
 #define LED_PIN 2
 #include "main.h"
 // --- Micro-ROS objects ---
@@ -16,12 +17,13 @@ rcl_node_t node;
 rclc_executor_t executor;
 
 // Subscription & Publishers
-rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg ,sub_platform_vel;
+rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg ,sub_platform_vel ,sub_hall_effect;
 rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint ,pub_platform_vel_out;
 
 // Messages
 std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint , msg_platform_vel_out;
 std_msgs__msg__Float32 msg_rpsl, msg_rpsr, msg_degl, msg_degr;
+std_msgs__msg__Bool msg_hall_effect;
 geometry_msgs__msg__Twist msg_cmd_vel , msg_platform_vel;
 
 // จอง Memory สำหรับรับข้อมูล Array (ต้องจองไว้ล่วงหน้า)
@@ -67,8 +69,14 @@ void platform_vel_callback(const void * msgin) {
   last_cmd_vel_time = millis();
   
   platform_linear  = msg->linear.x;
-  // pid_motor(current_linear, current_angular, rps_l, rps_r);
-  // pwm_platform(current_linear);
+}
+
+void hall_effect_callback(const void * msgin) {
+  const std_msgs__msg__Bool * msg = (const std_msgs__msg__Bool *)msgin;
+  
+  bool hall_effect_triggered = msg->data;
+  // ส่งสถานะ Hall Effect ไปที่ PID ของ Platform
+  pwm_platform(hall_effect_triggered, platform_linear);
 }
 
 // void check_cmd_timeout() {
@@ -169,12 +177,15 @@ void setup() {
   RCCHECK(rclc_subscription_init_default(&sub_arm_deg, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));  
   RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
   RCCHECK(rclc_subscription_init_default(&sub_platform_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "platform_cmd_vel"));
+  RCCHECK(rclc_subscription_init_default(&sub_hall_effect, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "hall_effect"));
   // --- 4. Init Executor (1 handle สำหรับ 1 subscriber) ---
-  RCCHECK(rclc_executor_init(&executor, &support.context, 4, &allocator));
+  RCCHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor_rps, &msg_sub_rps, &rps_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_deg, &msg_arm_deg, &arm_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &vel_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_platform_vel, &msg_platform_vel, &platform_vel_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_hall_effect, &msg_hall_effect, &hall_effect_callback, ON_NEW_DATA));
+  // -----------------------
   // เปิดไฟค้างไว้เมื่อพร้อมทำงาน
   digitalWrite(LED_PIN, HIGH);
 }
