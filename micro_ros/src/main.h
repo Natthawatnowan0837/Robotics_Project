@@ -19,10 +19,10 @@
 #define PlatformRight_R  27
 #define PlatformRight_L 14
 
-#define ArmLeft_R 13
-#define ArmLeft_L 12
-#define ArmRight_R  27
-#define ArmRight_L 14
+#define ArmLeft_R 26
+#define ArmLeft_L 25
+#define ArmRight_R 32
+#define ArmRight_L 33
 
 // --- Macros ---
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
