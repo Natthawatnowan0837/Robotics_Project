@@ -56,8 +56,8 @@ void Encoder_motor() {
     float out_r = (abs(filtered_rps_r) < 0.02) ? 0.00f : roundf(filtered_rps_r * 100.0f) / 100.0f;
 
     // ส่งค่าเข้า Message
-    msg_motor_rps.data.data[0] = out_l;
-    msg_motor_rps.data.data[1] = out_r;
+    msg_motor.data.data[0] = out_l;
+    msg_motor.data.data[1] = out_r;
 
     // เก็บค่าไว้ใช้ในรอบถัดไป
     last_angle_ml = current_angle_l;

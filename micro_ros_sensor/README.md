@@ -66,14 +66,14 @@ ros2 daemon start
 # -----------------------------
 # 7) รัน micro-ROS Agent (Serial Mode)
 # -----------------------------
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB1 -b 115200
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200
 
 # อธิบาย:
 # serial              = ใช้งานผ่าน Serial
 # --dev /dev/ttyUSB0  = ระบุพอร์ต
 # -b 115200           = baudrate ต้องตรงกับฝั่งบอร์ด
 
-
+36
 # =========================================================
 # เปิดอีก Terminal สำหรับตรวจสอบ Topic
 # =========================================================

@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/twist.h> 
 #include <rcutils/logging_macros.h>
 
+
 #define WheelmotorLeft_R 19
 #define WheelmotorLeft_L 18
 #define WheelmotorRight_R 16
@@ -27,17 +28,33 @@
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-// --- แชร์ฟังก์ชันและตัวแปร (Extern) ---
-void error_loop();
-extern rcl_publisher_t pub_vel_out,pub_setpoint,pub_platform_vel_out;
-extern std_msgs__msg__Float32MultiArray msg_vel_out,msg_setpoint,msg_platform_vel_out;
-extern unsigned long lastMsgTime; // เพิ่มเพื่อให้ไฟล์อื่นมองเห็นตัวแปรเวลา
+extern float motorDrive_L; 
+extern float motorDrive_R;
+extern float motorArm_L;
+extern float motorArm_R;
+extern float linear_control; 
+extern float angular_control;
+extern float platform_control;
+extern float arm_control;
+extern float pid_driveL_parameters[3];
+extern float pid_driveR_parameters[3];
+extern float pid_platform_parameters[3];
 
+extern rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
 
-// --- ฟังก์ชันต้นแบบ (Prototypes) ---
-// แก้ไข: เปลี่ยนชื่อพารามิเตอร์ไม่ให้ซ้ำกัน (l กับ r
+extern std_msgs__msg__Float32 msg_pub_stateArm;
+extern std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; 
+
+// // --- แชร์ฟังก์ชันและตัวแปร (Extern) ---
 void init_PID();
-void pid_motor(float linear , float angular, float enc_left, float enc_right);
-// void pwm(float linear, float angular);
-void pwm_platform(bool hall_effect_triggered, float platform_linear);
+void pid_drive(float linear, float angular, float motorDrive_L, float motorDrive_R);
+
+void init_plateformPID();
+void pid_plateform(float platform_y,float hall_effect,float omega_platform_y);
+
+// void pwm_motor(float linear_control,float angular_control);
+// void pwm_platform(float platform_control,float hall_effect);
+// void pwm_arm(float arm_control);
+
+
 #endif

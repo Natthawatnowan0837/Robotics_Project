@@ -1,80 +1,111 @@
 #include "main.h"
 
-// ตัวแปรเก็บค่ามุม
-float angleBodyX, angleBodyY, angleBodyZ;
-float anglePlatformX, anglePlatformY, anglePlatformZ;
-unsigned long last_gyro_time = 0;
-float alpha_lpf = 0.15f;
-// ตัวแปร Global
 Adafruit_MPU6050 mpuBody;
 Adafruit_MPU6050 mpuPlatform;
-// กำหนดขนาดของ Window สำหรับ Median Filter
-#define WINDOW_SIZE 5
 
-// Buffer สำหรับเก็บค่าย้อนหลัง (Body)
-float bodyAX_buf[WINDOW_SIZE], bodyAY_buf[WINDOW_SIZE], bodyAZ_buf[WINDOW_SIZE];
-// Buffer สำหรับเก็บค่าย้อนหลัง (Platform)
-float platAX_buf[WINDOW_SIZE], platAY_buf[WINDOW_SIZE], platAZ_buf[WINDOW_SIZE];
+// --- [ ค่าคงที่สำหรับการปรับจูน ] ---
+#define GYRO_CAL_SAMPLES 200 
+#define ALPHA 0.1f  // ค่า Filter (0.1 = นิ่งและตอบสนองดี)
 
-int buf_idx = 0; // ตัวชี้ตำแหน่ง Array
+// --- [ ตัวแปรเก็บค่ามุม (Filtered) ] ---
+float angleBodyX = 0, angleBodyY = 0;
+float anglePlatformX = 0, anglePlatformY = 0;
+float gyroRateY_filtered = 0, gyroRatePY_filtered = 0;
 
+// --- [ ตัวแปรสำหรับ Calibration (Offset/Bias) ] ---
+// สำหรับ Gyro (ความเร็วเชิงมุม)
+float biasBodyX = 0, biasBodyY = 0;
+float biasPlatX = 0, biasPlatY = 0;
+// สำหรับ Accelerometer (มุมเอียงเริ่มต้น)
+float offsetBodyX = 0, offsetBodyY = 0;
+float offsetPlatX = 0, offsetPlatY = 0;
+
+// --- [ ฟังก์ชัน Set ศูนย์ (Calibration) ] ---
+void calibrateSensors() {
+    Serial.println("Calibrating IMUs... Keep it STEADY!");
+    sensors_event_t a, g, temp;
+    
+    float sumBX = 0, sumBY = 0, sumPX = 0, sumPY = 0;
+    float sumAngBX = 0, sumAngBY = 0, sumAngPX = 0, sumAngPY = 0;
+
+    for (int i = 0; i < GYRO_CAL_SAMPLES; i++) {
+        // --- อ่านค่าจาก Body (TCA 0) ---
+        tcaSelect(0);
+        mpuBody.getEvent(&a, &g, &temp);
+        sumBX += g.gyro.x; 
+        sumBY += g.gyro.y;
+        sumAngBX += atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI;
+        sumAngBY += atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI;
+
+        // --- อ่านค่าจาก Platform (TCA 1) ---
+        tcaSelect(1);
+        mpuPlatform.getEvent(&a, &g, &temp);
+        sumPX += g.gyro.x; 
+        sumPY += g.gyro.y;
+        sumAngPX += atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI;
+        sumAngPY += atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI;
+        
+        delay(5); // หน่วงเวลาเล็กน้อยเพื่อให้ได้ค่าที่ต่างกันในแต่ละรอบ
+    }
+
+    // คำนวณค่าเฉลี่ยเพื่อใช้เป็นค่า "ศูนย์"
+    biasBodyX = sumBX / (float)GYRO_CAL_SAMPLES;
+    biasBodyY = sumBY / (float)GYRO_CAL_SAMPLES;
+    biasPlatX = sumPX / (float)GYRO_CAL_SAMPLES;
+    biasPlatY = sumPY / (float)GYRO_CAL_SAMPLES;
+
+    offsetBodyX = sumAngBX / (float)GYRO_CAL_SAMPLES;
+    offsetBodyY = sumAngBY / (float)GYRO_CAL_SAMPLES;
+    offsetPlatX = sumAngPX / (float)GYRO_CAL_SAMPLES;
+    offsetPlatY = sumAngPY / (float)GYRO_CAL_SAMPLES;
+
+    // Reset ค่าในตัวแปรหลักให้เป็น 0 ทันทีหลัง Calibrate
+    angleBodyX = 0; angleBodyY = 0;
+    anglePlatformX = 0; anglePlatformY = 0;
+    gyroRateY_filtered = 0; gyroRatePY_filtered = 0;
+
+    Serial.println("Calibration Done. System Zeroed.");
+}
+
+// --- [ ฟังก์ชันอ่านค่าและประมวลผล ] ---
 void Gyro() {
     sensors_event_t a, g, temp;
-    float dt = (millis() - last_gyro_time) / 1000.0f;
-    last_gyro_time = millis();
-
-    // --- [อ่าน Body IMU - TCA 0] ---
+    
+    // --- [ 1. จัดการ BODY IMU (TCA 0) ] ---
     tcaSelect(0);
     mpuBody.getEvent(&a, &g, &temp);
-    
-    // เก็บค่าลง Buffer
-    bodyAX_buf[buf_idx] = a.acceleration.x;
-    bodyAY_buf[buf_idx] = a.acceleration.y;
-    bodyAZ_buf[buf_idx] = a.acceleration.z;
 
-    // หาค่า Median ของ Accelerometer ก่อนคำนวณมุม
-    float fAX = medianFilter(bodyAX_buf, WINDOW_SIZE);
-    float fAY = medianFilter(bodyAY_buf, WINDOW_SIZE);
-    float fAZ = medianFilter(bodyAZ_buf, WINDOW_SIZE);
+    // คำนวณค่า Raw และหักลบค่า Offset (เพื่อให้เริ่มที่ 0)
+    float rawBodyX = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetBodyX;
+    float rawBodyY = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetBodyY;
+    float rawGyroRateY = (g.gyro.y - biasBodyY) * 180.0f / PI;
 
-    // คำนวณมุมด้วย Complementary Filter (ใช้ค่าที่ผ่าน Median แล้ว)
-    float rawAccAngleX = atan2(fAY, fAZ) * 180 / PI;
-    float rawAccAngleY = atan2(-fAX, sqrt(pow(fAY, 2) + pow(fAZ, 2))) * 180 / PI;
-    
-    float currentAngleBodyX = 0.96f * (angleBodyX + g.gyro.x * dt) + 0.04f * rawAccAngleX;
-    float currentAngleBodyY = 0.96f * (angleBodyY + g.gyro.y * dt) + 0.04f * rawAccAngleY;
+    // กรองสัญญาณรบกวน (Low-pass Filter)
+    angleBodyX = (ALPHA * rawBodyX) + ((1.0f - ALPHA) * angleBodyX);
+    angleBodyY = (ALPHA * rawBodyY) + ((1.0f - ALPHA) * angleBodyY);
+    gyroRateY_filtered = (ALPHA * rawGyroRateY) + ((1.0f - ALPHA) * gyroRateY_filtered);
 
-    // ตบท้ายด้วย Low-pass Filter เพื่อความนิ่งสุดๆ
-    angleBodyX = lowpassFilter(currentAngleBodyX, angleBodyX, 0.15f);
-    angleBodyY = lowpassFilter(currentAngleBodyY, angleBodyY, 0.15f);
-
-    // --- [อ่าน Platform IMU - TCA 1] ---
+    // --- [ 2. จัดการ PLATFORM IMU (TCA 1) ] ---
     tcaSelect(1);
     mpuPlatform.getEvent(&a, &g, &temp);
+
+    // คำนวณค่า Raw และหักลบค่า Offset
+    float rawPlatX = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetPlatX;
+    float rawPlatY = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetPlatY;
+    float rawGyroRatePY = (g.gyro.y - biasPlatY) * 180.0f / PI;
+
+    // กรองสัญญาณรบกวน (Low-pass Filter)
+    anglePlatformX = (ALPHA * rawPlatX) + ((1.0f - ALPHA) * anglePlatformX);
+    anglePlatformY = (ALPHA * rawPlatY) + ((1.0f - ALPHA) * anglePlatformY);
+    gyroRatePY_filtered = (ALPHA * rawGyroRatePY) + ((1.0f - ALPHA) * gyroRatePY_filtered);
+
+    // --- [ 3. ส่งข้อมูลออก (Mapping Index) ] ---
+    msg_sensors.data.data[0] = roundf(angleBodyX * 100.0f) / 100.0f;
+    msg_sensors.data.data[1] = roundf(angleBodyY * 100.0f) / 100.0f;
+    msg_sensors.data.data[2] = roundf(anglePlatformX * 100.0f) / 100.0f;
+    msg_sensors.data.data[3] = roundf(anglePlatformY * 100.0f) / 100.0f;
     
-    platAX_buf[buf_idx] = a.acceleration.x;
-    platAY_buf[buf_idx] = a.acceleration.y;
-    platAZ_buf[buf_idx] = a.acceleration.z;
-
-    float fPAX = medianFilter(platAX_buf, WINDOW_SIZE);
-    float fPAY = medianFilter(platAY_buf, WINDOW_SIZE);
-    float fPAZ = medianFilter(platAZ_buf, WINDOW_SIZE);
-
-    float rawAccAnglePX = atan2(fPAY, fPAZ) * 180 / PI;
-    float rawAccAnglePY = atan2(-fPAX, sqrt(pow(fPAY, 2) + pow(fPAZ, 2))) * 180 / PI;
-
-    float currentAnglePlatformX = 0.96f * (anglePlatformX + g.gyro.x * dt) + 0.04f * rawAccAnglePX;
-    float currentAnglePlatformY = 0.96f * (anglePlatformY + g.gyro.y * dt) + 0.04f * rawAccAnglePY;
-
-    anglePlatformX = lowpassFilter(currentAnglePlatformX, anglePlatformX, 0.15f);
-    anglePlatformY = lowpassFilter(currentAnglePlatformY, anglePlatformY, 0.15f);
-
-    // อัปเดต Index สำหรับรอบถัดไป
-    buf_idx = (buf_idx + 1) % WINDOW_SIZE;
-
-    // เก็บค่าลงโครงสร้างข้อมูลของคุณ
-    msg_imu_body.x = roundf(angleBodyX * 100.0f) / 100.0f;
-    msg_imu_body.y = roundf(angleBodyY * 100.0f) / 100.0f;
-    msg_imu_platform.x = roundf(anglePlatformX * 100.0f) / 100.0f;
-    msg_imu_platform.y = roundf(anglePlatformY * 100.0f) / 100.0f;
+    // Index 5 และ 6 สำหรับความเร็วการเอียง (Angular Velocity)
+    msg_sensors.data.data[5] = roundf(gyroRateY_filtered * 100.0f) / 100.0f;
+    msg_sensors.data.data[6] = roundf(gyroRatePY_filtered * 100.0f) / 100.0f;
 }

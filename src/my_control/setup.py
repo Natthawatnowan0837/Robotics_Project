@@ -30,7 +30,7 @@ setup(
             # models และ meshes (ตรวจให้ดีว่าไม่มีโฟลเดอร์ซ้อนใน meshes ถ้ามีต้องทำแบบเดียวกับ maps)
             (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.sdf')),
             (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.config')),
-            (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.xacro')),
+            (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.xacro')),        
             (os.path.join('share', package_name, 'models/my_stair_robot/meshes'), glob('models/my_stair_robot/meshes/*')),
             
             # อย่าลืมเพิ่มโฟลเดอร์ launch ด้วยนะครับ!
@@ -47,8 +47,9 @@ setup(
     entry_points={
         'console_scripts': [
             'joystick_control = my_control.xbox_360:main',
-            'pid_visualizer = my_control.analysis:main',
+            'params = my_control.params:main',
             'rps_to_cmd_vel.py = my_control.rps_to_cmd_vel:main',
+            'rl = my_control.rl:main',
         ],
     },
 )

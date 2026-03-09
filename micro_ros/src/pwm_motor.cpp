@@ -1,7 +1,7 @@
 // #include "main.h"
 
 // void Motor_drive(int pinA, int pinB, float speed) {
-//   speed = constrain(speed, -255, 255);
+//   speed = constrain(speed, -30, 30);
 //   if (speed > 0) {
 //     analogWrite(pinA, speed);
 //     analogWrite(pinB, 0);
@@ -20,10 +20,10 @@
 //     Motor_drive(WheelmotorLeft_R, WheelmotorLeft_L, 0);
 //     Motor_drive(WheelmotorRight_R, WheelmotorRight_L, 0);
 
-//     msg_vel_out.data.data[0] = 0.0f;
-//     msg_vel_out.data.data[1] = 0.0f;
-//     RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
-//     return;
+//     // msg_vel_out.data.data[0] = 0.0f;
+//     // msg_vel_out.data.data[1] = 0.0f;
+//     // RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
+//     // return;
 //   }
 
 //   // 2. คำนวณค่า PWM พื้นฐาน (Differential Drive Logic แบบง่าย)
@@ -41,8 +41,9 @@
 //   Motor_drive(WheelmotorRight_R, WheelmotorRight_L, pwm_r * -1.0f);
 
 //   // 5. ส่งค่ากลับไป ROS เพื่อตรวจสอบ
-//   msg_vel_out.data.data[0] = pwm_l;
-//   msg_vel_out.data.data[1] = pwm_r;
-//   RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
+
+// //   msg_vel_out.data.data[0] = pwm_l;
+// //   msg_vel_out.data.data[1] = pwm_r;
+// //   RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
 // }
 

@@ -3,7 +3,7 @@
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32MultiArray
 import pygame
 import os
 
@@ -11,16 +11,19 @@ class XboxControllerNode(Node):
     def __init__(self):
         super().__init__('xbox_controller_node')
         
+        # --- [ ส่วนที่แก้ค่าความเร็วได้ง่ายๆ ] ---
+        self.cfg = {
+            'linear_max':  2.0,    # ความเร็วเดินหน้า-ถอยหลังสูงสุด
+            'angular_max': 3.0,    # ความเร็วการเลี้ยวสูงสุด
+            'platform_speed': 0.5, # ความเร็วเวลายก Platform (ขึ้น/ลง)
+            'arm_speed': 0.5,      # ความเร็วเวลายก Arm
+            'deadzone': 0.15,      # ค่ากันจอยเดินเอง (0.0 - 1.0)
+            'boost_multiplier': 1.5 # ตัวคูณความเร็วเวลาอยากให้วิ่งเร็วพิเศษ (ถ้าจะทำเพิ่ม)
+        }
+        # ---------------------------------------
+
         os.environ["SDL_VIDEODRIVER"] = "dummy"
-        
-        # Publisher สำหรับตัวหุ่น, Platform และ Arm
-        self.move_pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.platform_pub = self.create_publisher(Twist, 'platform_cmd_vel', 10)
-        self.arm_pub = self.create_publisher(Twist, 'arm_cmd_vel', 10) # เพิ่ม Publisher สำหรับแขน
-        
-        self.base_speed = 1.0     
-        self.multiplier = 1.0     
-        self.deadzone = 0.15      
+        self.ctrl_pub = self.create_publisher(Float32MultiArray, 'controller', 10)
         
         pygame.init()
         pygame.joystick.init()
@@ -31,62 +34,46 @@ class XboxControllerNode(Node):
             
         self.joy = pygame.joystick.Joystick(0)
         self.joy.init()
-        
-        self.get_logger().info("---------------------------------------------")
-        self.get_logger().info("RT: Arm UP (+1) | LT: Arm DOWN (-1)")
-        self.get_logger().info("D-pad: Platform | Analog: Robot Move")
-        self.get_logger().info("---------------------------------------------")
-
+        self.get_logger().info("--- Xbox Controller Node Started (Speed Configurable) ---")
         self.timer = self.create_timer(0.05, self.controller_loop)
 
     def controller_loop(self):
-        # ตรวจสอบ Event ปุ่ม A/Y (เหมือนเดิม)
-        for event in pygame.event.get():
-            if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == 0: # A
-                    self.multiplier = max(0.1, self.multiplier - 0.1)
-                elif event.button == 3: # Y
-                    self.multiplier = min(2.0, self.multiplier + 0.1)
+        pygame.event.pump()
+        msg = Float32MultiArray()
+        
+        # ลำดับข้อมูล: [0]=Linear, [1]=Angular, [2]=Platform, [3]=Arm
+        ctrl_data = [0.0, 0.0, 0.0, 0.0]
 
-        # --- 1. ควบคุมหุ่นยนต์หลัก (cmd_vel) ---
-        move_msg = Twist()
+        # 1. คำนวณความเร็วหุ่นยนต์ (ใช้ค่าจาก self.cfg)
         raw_linear = -self.joy.get_axis(1)
         raw_angular = -self.joy.get_axis(2) 
-
-        if abs(raw_linear) > self.deadzone:
-            move_msg.linear.x = float(raw_linear * self.base_speed * self.multiplier)
-        if abs(raw_angular) > self.deadzone:
-            move_msg.angular.z = float(raw_angular * self.base_speed * self.multiplier * 1.5)
-        self.move_pub.publish(move_msg)
-
-        # --- 2. ควบคุม Platform (platform_cmd_vel) ---
-        dpad = self.joy.get_hat(0)
-        platform_msg = Twist()
-        if dpad[1] != 0:
-            platform_msg.linear.x = float(dpad[1]) * 0.2
-        self.platform_pub.publish(platform_msg)
-
-        # --- 3. ควบคุม Arm (arm_vel) ด้วย RT และ LT ---
-        arm_msg = Twist()
         
-        # อ่านค่า Trigger (ค่าปกติของ pygame คือ -1.0 ถึง 1.0)
-        # หมายเหตุ: Index ของ Axis อาจต่างกันตาม Driver (RT ปกติคือ 5, LT คือ 2 หรือ 4)
-        rt_val = self.joy.get_axis(5) 
-        lt_val = self.joy.get_axis(4) 
+        # ใช้ Max Speed จาก Config
+        if abs(raw_linear) > self.cfg['deadzone']:
+            ctrl_data[0] = float(raw_linear * self.cfg['linear_max'])
+            
+        if abs(raw_angular) > self.cfg['deadzone']:
+            ctrl_data[1] = float(raw_angular * self.cfg['angular_max'])
 
-        # แปลงค่าจาก (-1.0 ถึง 1.0) ให้เป็น (0.0 ถึง 1.0)
-        rt_pressed = (rt_val + 1.0) / 2.0
-        lt_pressed = (lt_val + 1.0) / 2.0
+        # 2. ควบคุม Platform (D-pad)
+        dpad = self.joy.get_hat(0)
+        if dpad[1] != 0:
+            # ส่งค่าความเร็วตามที่ตั้งไว้ใน Config
+            ctrl_data[2] = float(dpad[1] * self.cfg['platform_speed'])
 
-        # Logic: ถ้ากด RT ให้เป็นบวก, ถ้ากด LT ให้เป็นลบ
-        if rt_pressed > 0.1: # Threshold กันค่าแกว่ง
-            arm_msg.linear.x = 1.0
-        elif lt_pressed > 0.1:
-            arm_msg.linear.x = -1.0
-        else:
-            arm_msg.linear.x = 0.0
+        # 3. ควบคุม Arm (RT/LT)
+        # RT (Axis 5), LT (Axis 4) - ค่าดิบจะได้ -1.0 ถึง 1.0
+        rt_val = (self.joy.get_axis(5) + 1.0) / 2.0
+        lt_val = (self.joy.get_axis(4) + 1.0) / 2.0
 
-        self.arm_pub.publish(arm_msg)
+        if rt_val > 0.2:
+            ctrl_data[3] = float(self.cfg['arm_speed'])
+        elif lt_val > 0.2:
+            ctrl_data[3] = float(-self.cfg['arm_speed'])
+
+        # ส่งข้อมูลเข้า Topic
+        msg.data = ctrl_data
+        self.ctrl_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -96,10 +83,10 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        stop_msg = Twist()
-        node.move_pub.publish(stop_msg)
-        node.platform_pub.publish(stop_msg)
-        node.arm_pub.publish(stop_msg) # หยุดแขนด้วย
+        # ส่งค่า 0 เพื่อหยุดหุ่นยนต์
+        stop_msg = Float32MultiArray()
+        stop_msg.data = [0.0, 0.0, 0.0, 0.0]
+        node.ctrl_pub.publish(stop_msg)
         pygame.quit()
         node.destroy_node()
         rclpy.shutdown()

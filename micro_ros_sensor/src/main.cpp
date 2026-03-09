@@ -6,17 +6,12 @@ rcl_allocator_t allocator;
 rcl_node_t node;
 rclc_executor_t executor;
 rcl_timer_t timer;
-rcl_publisher_t pub_motor_rps, pub_arm_degrees,
-                pub_imu_body, pub_imu_platform,
-                pub_hall_effect;
+rcl_publisher_t pub_motor , pub_sensors;
 
-std_msgs__msg__Bool msg_hall_effect;
-geometry_msgs__msg__Vector3 msg_imu_body, msg_imu_platform;
-std_msgs__msg__Float32MultiArray msg_motor_rps  ,msg_arm_degrees; 
+std_msgs__msg__Float32MultiArray msg_motor , msg_sensors; 
 
-float motor_data[2] = {0.0f, 0.0f};
-float arm_data[2] = {0.0f, 0.0f};
-bool imu_online[2] = {false, false};
+float sensors[7];
+float motor_data[4] = {0.0f, 0.0f, 0.0f, 0.0f,};
 
 void tcaSelect(uint8_t i) {
     if (i > 7) return;
@@ -42,13 +37,11 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
         hall_effect();
 
         // 2. Publish ข้อมูลที่อ่านได้
-        RCSOFTCHECK(rcl_publish(&pub_motor_rps, &msg_motor_rps, NULL));
-        RCSOFTCHECK(rcl_publish(&pub_arm_degrees, &msg_arm_degrees, NULL));
-        RCSOFTCHECK(rcl_publish(&pub_imu_body, &msg_imu_body, NULL));
-        RCSOFTCHECK(rcl_publish(&pub_imu_platform, &msg_imu_platform, NULL));
-        RCSOFTCHECK(rcl_publish(&pub_hall_effect, &msg_hall_effect, NULL));
+        RCSOFTCHECK(rcl_publish(&pub_motor, &msg_motor, NULL));
+        RCSOFTCHECK(rcl_publish(&pub_sensors, &msg_sensors, NULL));
     }
 }
+
 float lowpassFilter(float input, float prev_output, float alpha) {
     return (alpha * input) + ((1.0f - alpha) * prev_output);
 }
@@ -87,35 +80,33 @@ void setup() {
     delay(10);
     tcaSelect(5); as5600_arm.begin();
     // tcaSelect(6); pressure.begin();
-
+    calibrateSensors();
     allocator = rcl_get_default_allocator();
 
     // --- การจอง Memory สำหรับ MultiArray (สำคัญมาก) ---
-    msg_motor_rps.data.capacity = 2;
-    msg_motor_rps.data.size = 2;
-    msg_motor_rps.data.data = motor_data;
+    msg_motor.data.capacity = 4;
+    msg_motor.data.size = 4;
+    msg_motor.data.data = motor_data;
 
-    msg_arm_degrees.data.capacity = 2;
-    msg_arm_degrees.data.size = 2;
-    msg_arm_degrees.data.data = arm_data;
+    msg_motor.layout.dim.capacity = 0;
+    msg_motor.layout.dim.size = 0;
+    msg_motor.layout.data_offset = 0;
     // -----------------------------------------------
-    msg_motor_rps.layout.dim.capacity = 0;
-    msg_motor_rps.layout.dim.size = 0;
-    msg_motor_rps.layout.data_offset = 0;
-
-    msg_arm_degrees.layout.dim.capacity = 0;
-    msg_arm_degrees.layout.dim.size = 0;
-    msg_arm_degrees.layout.data_offset = 0;
+    msg_sensors.data.capacity = 7;
+    msg_sensors.data.size = 7;
+    msg_sensors.data.data = sensors;
     
+    msg_sensors.layout.dim.capacity = 0;
+    msg_sensors.layout.dim.size = 0;
+    msg_sensors.layout.data_offset = 0;
+
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
     RCCHECK(rclc_node_init_default(&node, "esp32_sensor_node", "", &support));
 
     // Publishers
-    RCCHECK(rclc_publisher_init_default(&pub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
-    RCCHECK(rclc_publisher_init_default(&pub_arm_degrees, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));
-    RCCHECK(rclc_publisher_init_default(&pub_imu_body, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3), "gyro_body"));
-    RCCHECK(rclc_publisher_init_default(&pub_imu_platform, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3), "gyro_plateform"));
-    RCCHECK(rclc_publisher_init_default(&pub_hall_effect, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "hall_effect"));
+    RCCHECK(rclc_publisher_init_default(&pub_motor, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motors"));
+    RCCHECK(rclc_publisher_init_default(&pub_sensors, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "sensors"));
+    
     // Timer & Executor
     RCCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(20), timer_callback));
     RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator)); // เลข 1 คือจำนวน timer

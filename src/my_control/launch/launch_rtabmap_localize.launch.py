@@ -21,8 +21,6 @@ def generate_launch_description():
             'enable_sync': 'true',
             'depth_module.profile': '640x480x15', # ลดความละเอียดและ FPS (มาตรฐานคือ 30fps ซึ่งหนักไป)
             'rgb_camera.profile': '640x480x15',    # ลด Resolution ของภาพสี (SLAM ไม่จำเป็นต้องใช้ Full HD)
-            'pointcloud.enable': 'false',          # ปิดการสร้าง Pointcloud จากกล้อง (ให้ RTAB-Map ทำเองจะประหยัดกว่า)
-            'clip_distance': '4.0',                # ตัดข้อมูลที่ไกลเกิน 4 เมตร (ลด Noise และการประมวลผล)
 
         }.items()
     )
@@ -69,7 +67,7 @@ def generate_launch_description():
     #     arguments=['0.0', '0.0', '0.0', '-1.5708', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
     # )
 
-    database_full_path = os.path.expanduser('~/.ros/rtabmap.db')
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/maps/rtabmap.db')
 
     # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
     rtabmap = IncludeLaunchDescription(
@@ -77,6 +75,7 @@ def generate_launch_description():
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
+            'rtabmap_args': '--Optimizer/GravitySigma 0.3 --Optimizer/Strategy 1',
             'localization': 'true', 
             'database_path': database_full_path,         # ระบุที่เก็บแผนที่
             'rgb_topic': '/camera/camera/color/image_raw',

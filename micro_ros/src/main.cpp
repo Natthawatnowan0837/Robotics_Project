@@ -1,46 +1,131 @@
 #include <Arduino.h>
-#include <Wire.h>
 #include <micro_ros_arduino.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
-#include <std_msgs/msg/float32.h>
-#include <std_msgs/msg/float32_multi_array.h>
-#include <geometry_msgs/msg/twist.h>
-#include <std_msgs/msg/bool.h>
-#define LED_PIN 2
 #include "main.h"
-// --- Micro-ROS objects ---
+#define LED_PIN 2
+// --- ตัวแปรระดับ Global ---
 rclc_support_t support;
-rcl_allocator_t allocator;
 rcl_node_t node;
+rcl_allocator_t allocator;
 rclc_executor_t executor;
+rcl_timer_t timer;
 
-// Subscription & Publishers
-rcl_subscription_t sub_motor_rps, sub_cmd_vel , sub_arm_deg ,sub_platform_vel ,sub_hall_effect;
-rcl_publisher_t pub_rps_l, pub_rps_r, pub_deg_l, pub_deg_r , pub_vel_out, pub_setpoint ,pub_platform_vel_out;
+rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
+rcl_subscription_t sub_motor,sub_controller,sub_sensors,sub_pid;
 
-// Messages
-std_msgs__msg__Float32MultiArray msg_sub_rps , msg_arm_deg , msg_vel_out , msg_setpoint , msg_platform_vel_out;
-std_msgs__msg__Float32 msg_rpsl, msg_rpsr, msg_degl, msg_degr;
-std_msgs__msg__Bool msg_hall_effect;
-geometry_msgs__msg__Twist msg_cmd_vel , msg_platform_vel;
+std_msgs__msg__Float32 msg_pub_stateArm;
+std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; // สำหรับส่งออก
+std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_controller,msg_sub_sensors,msg_sub_pid; // สำหรับรับเข้า
 
-// จอง Memory สำหรับรับข้อมูล Array (ต้องจองไว้ล่วงหน้า)
-static float rps_buffer[5]; 
-static float arm_buffer[2];
-static float vel_out_buffer[2];
-static float setpoint_buffer[2];
-static float platform_vel_out_buffer[2];
+// float pub_buffer[5]; // จองพื้นที่ส่ง (ปรับจำนวนได้)
+float motor_data[4]; // จองพื้นที่รับ (ปรับจำนวนได้)
+float controller_data[4];
+float sensors_data[7];
+float pid_data[12];
+//-------------------
+float drive_report[4];
+float statePlatform_report[2];
+float balance_report[4];
 
-float current_linear = 0.0, current_angular = 0.0;
-float platform_linear = 0.0;
-float rps_l = 0.0, rps_r = 0.0;
-float deg_l = 0.0, deg_r = 0.0;
+//------------------------
+float motorDrive_L = 0.0; 
+float motorDrive_R = 0.0;
+float motorArm_L = 0.0;
+float motorArm_R = 0.0;
+//------------------------
+float linear_control = 0.0; 
+float angular_control = 0.0;
+float platform_control = 0.0;
+float arm_control = 0.0;
+//-------------------------
+float body_x = 0.0;
+float body_y = 0.0 ;
+float platform_x = 0.0;
+float platform_y = 0.0; 
+float hall_effect = 0.0;
+float omega_body_y = 0.0;
+float omega_platform_y = 0.0;
+//------------------------
+float pid_driveL_parameters[3];
+float pid_driveR_parameters[3];
+float pid_platform_parameters[3];
+float pid_arm_parameters[3];
 
-unsigned long last_cmd_vel_time = 0; // เก็บเวลาที่ได้รับข้อความล่าสุด
-// const unsigned long CMD_VEL_TIMEOUT = 500; // ตัดการทำงานหากไม่ได้รับค่าเกิน 0.5 วินาที
-// --- Error Handling ---
+// --- Callback: เมื่อได้รับข้อมูลจาก ROS 2 ---
+void motor_callback(const void * msgin) {
+  // 1. Cast ข้อมูลที่รับเข้ามาให้เป็นชนิด Float32MultiArray
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  if (msg->data.size >= 4) {
+    motorDrive_L = msg->data.data[0];
+    motorDrive_R = msg->data.data[1];
+    motorArm_L   = msg->data.data[2];
+    motorArm_R   = msg->data.data[3];
+  }
+}
+
+void controller_callback(const void * msgin) {
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  if (msg->data.size >= 4) {
+    linear_control   = msg->data.data[0];
+    angular_control  = msg->data.data[1];
+    platform_control = msg->data.data[2];
+    arm_control      = msg->data.data[3]; 
+  }
+}
+
+void sensors_callback(const void * msgin) {
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  body_x = sensors_data[0];
+  body_y = sensors_data[1];
+  platform_x = sensors_data[2];
+  platform_y = sensors_data[3]; 
+  hall_effect = sensors_data[4];
+  omega_body_y = sensors_data[5];
+  omega_platform_y == sensors_data[6];
+}
+
+void pid_callback(const void * msgin) {
+  // 1. Cast ข้อมูลจาก void* เป็น Float32MultiArray
+  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
+  
+  // 2. ตรวจสอบว่าข้อมูลมาครบ (12 ค่าตามที่ตั้งไว้ใน Python)
+  if (msg->data.size >= 12) {
+    // PID ล้อซ้าย (Index 0, 1, 2)
+    pid_driveL_parameters[0] = msg->data.data[0]; // Kp
+    pid_driveL_parameters[1] = msg->data.data[1]; // Ki
+    pid_driveL_parameters[2] = msg->data.data[2]; // Kd
+
+    // PID ล้อขวา (Index 3, 4, 5)
+    pid_driveR_parameters[0] = msg->data.data[3]; // Kp
+    pid_driveR_parameters[1] = msg->data.data[4]; // Ki
+    pid_driveR_parameters[2] = msg->data.data[5]; // Kd
+
+    // PID Platform (Index 6, 7, 8)
+    pid_platform_parameters[0] = msg->data.data[6];
+    pid_platform_parameters[1] = msg->data.data[7];
+    pid_platform_parameters[2] = msg->data.data[8];
+
+    // PID Arm (Index 9, 10, 11)
+    pid_arm_parameters[0] = msg->data.data[9];
+    pid_arm_parameters[1] = msg->data.data[10];
+    pid_arm_parameters[2] = msg->data.data[11];
+  }
+}
+// --- Timer: สำหรับส่งข้อมูลออก (ทำงานทุก 20ms หรือ 50Hz) ---
+void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
+  if (timer != NULL) {
+    pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
+    pid_plateform(platform_y,hall_effect,omega_platform_y);
+    // pwm_motor(linear_control,angular_control),pid_drive[3];
+    // pwm_platform(platform_control,hall_effect);
+    // pwm_arm(arm_control);
+    // หยอดข้อมูลลง pub_data[i] ก่อนส่ง
+    // RCSOFTCHECK(rcl_publish(&pub_data, &msg_pub, NULL));
+  }
+}
+
 void error_loop() {
   while (1) {
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
@@ -48,151 +133,84 @@ void error_loop() {
   }
 }
 
-#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
-#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
-
-void vel_callback(const void * msgin) {
-  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
-  
-  last_cmd_vel_time = millis();
-  
-  current_linear  = msg->linear.x;
-  current_angular = msg->angular.z;
-
-  pid_motor(current_linear, current_angular, rps_l, rps_r);
-  // pwm(current_linear, current_angular);
-}
-
-void platform_vel_callback(const void * msgin) {
-  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
-  
-  last_cmd_vel_time = millis();
-  
-  platform_linear  = msg->linear.x;
-}
-
-void hall_effect_callback(const void * msgin) {
-  const std_msgs__msg__Bool * msg = (const std_msgs__msg__Bool *)msgin;
-  
-  bool hall_effect_triggered = msg->data;
-  // ส่งสถานะ Hall Effect ไปที่ PID ของ Platform
-  pwm_platform(hall_effect_triggered, platform_linear);
-}
-
-// void check_cmd_timeout() {
-//   if (millis() - last_cmd_vel_time > CMD_VEL_TIMEOUT) {
-//     // หากเกินเวลาที่กำหนด ให้สั่งหยุดมอเตอร์เพื่อความปลอดภัย
-//     pwm(0.0, 0.0); 
-//   }
-// }
-
-// --- Callback Function ---
-void rps_callback(const void * msgin) {
-  // เมื่อมีข้อมูลเข้า ให้ไฟสถานะเปลี่ยนค่า (Toggle)
-  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-
-  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  
-  // ตรวจสอบว่ามีข้อมูลส่งมาอย่างน้อย 2 ค่า
-  if (msg->data.size >= 2) {
-    // 1. ดึงค่าออกมาและปัดเศษให้เหลือ 2 ตำแหน่งทันที
-    // สูตร: round(ค่า * 100) / 100
-    rps_l = roundf(msg->data.data[0] * 100.0f) / 100.0f;
-    rps_r = roundf(msg->data.data[1] * 100.0f) / 100.0f;
-
-    // 2. จัดการเรื่อง Deadzone (ถ้าค่าน้อยมากๆ ให้เป็น 0.00)
-    if (abs(rps_l) < 0.01f) rps_l = 0.00f;
-    if (abs(rps_r) < 0.01f) rps_r = 0.00f;
-
-    // 3. ส่งค่าออกไปที่ Topic Debug
-    msg_rpsl.data = rps_l;
-    msg_rpsr.data = rps_r;
-    
-    RCSOFTCHECK(rcl_publish(&pub_rps_l, &msg_rpsl, NULL));
-    RCSOFTCHECK(rcl_publish(&pub_rps_r, &msg_rpsr, NULL));
-  }
-}
-
-void arm_callback(const void * msgin) {
-  // เมื่อมีข้อมูลเข้า ให้ไฟสถานะเปลี่ยนค่า (Toggle)
-  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-
-  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  
-  // ตรวจสอบว่ามีข้อมูลส่งมาอย่างน้อย 2 ค่า
-  if (msg->data.size >= 2) {
-    // 1. ดึงค่าออกมา
-    deg_l = msg->data.data[0];
-    deg_r = msg->data.data[1];
-
-    // 2. ส่งค่าออกไปที่ Topic Debug
-    msg_degl.data = deg_l;
-    msg_degr.data = deg_r;
-    
-    RCSOFTCHECK(rcl_publish(&pub_deg_l, &msg_degl, NULL));
-    RCSOFTCHECK(rcl_publish(&pub_deg_r, &msg_degr, NULL));
-  }
-}
-
 void setup() {
   init_PID();
-  pinMode(LED_PIN, OUTPUT);
-  set_microros_transports();
-
+  init_plateformPID();
+  set_microros_transports(); // เริ่มต้น Serial Transport
+  
   allocator = rcl_get_default_allocator();
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+  RCCHECK(rclc_node_init_default(&node, "esp32_base_node", "", &support));
+
+  // --- 1. เคลียร์และจอง Memory สำหรับ MultiArray (สำคัญที่สุด) ---งจริง
+
+  msg_sub_motor.data.data = motor_data;
+  msg_sub_motor.data.capacity = 4;
   
-  // ตั้งชื่อ Node ให้ต่างจากตัวแรก
-  RCCHECK(rclc_node_init_default(&node, "esp32_debug_sub_node", "", &support));
+  msg_sub_controller.data.data = controller_data;
+  msg_sub_controller.data.capacity = 4;
 
-  // --- 1. เตรียม Memory สำหรับ Message ที่จะ Subscribe ---
-  msg_sub_rps.data.data = rps_buffer;
-  msg_sub_rps.data.capacity = 5;
-  msg_sub_rps.data.size = 0;
+  msg_sub_sensors.data.data = sensors_data;
+  msg_sub_sensors.data.capacity = 7;
 
-  msg_arm_deg.data.data = arm_buffer;
-  msg_arm_deg.data.capacity = 2;
-  msg_arm_deg.data.size = 0;
-
-  msg_vel_out.data.data = vel_out_buffer;
-  msg_vel_out.data.capacity = 2;
-  msg_vel_out.data.size = 2;
-
-  msg_setpoint.data.data = setpoint_buffer;
-  msg_setpoint.data.capacity = 2;
-  msg_setpoint.data.size = 2;
-
-  msg_platform_vel_out.data.data = platform_vel_out_buffer;
-  msg_platform_vel_out.data.capacity = 2;
-  msg_platform_vel_out.data.size = 2;
-
-  // --- 2. Init Publishers (สำหรับ Debug) ---
- 
-  RCCHECK(rclc_publisher_init_default(&pub_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_velocity_output"));
-  RCCHECK(rclc_publisher_init_default(&pub_setpoint, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "wheel_setpoint"));
-  RCCHECK(rclc_publisher_init_default(&pub_platform_vel_out, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "platform_velocity_output"));
+  msg_sub_pid.data.data = pid_data;
+  msg_sub_pid.data.capacity = 12;
   
-  // --- 3. Init Subscriber ---
-  RCCHECK(rclc_subscription_init_default(&sub_motor_rps, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motor_rps_array"));
-  RCCHECK(rclc_subscription_init_default(&sub_arm_deg, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "arm_deg_array"));  
-  RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
-  RCCHECK(rclc_subscription_init_default(&sub_platform_vel, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "platform_cmd_vel"));
-  RCCHECK(rclc_subscription_init_default(&sub_hall_effect, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "hall_effect"));
-  // --- 4. Init Executor (1 handle สำหรับ 1 subscriber) ---
-  RCCHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor_rps, &msg_sub_rps, &rps_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_deg, &msg_arm_deg, &arm_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &vel_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_platform_vel, &msg_platform_vel, &platform_vel_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_hall_effect, &msg_hall_effect, &hall_effect_callback, ON_NEW_DATA));
-  // -----------------------
-  // เปิดไฟค้างไว้เมื่อพร้อมทำงาน
-  digitalWrite(LED_PIN, HIGH);
+  //---------------------------------------------
+  msg_pub_drive.data.data = drive_report;
+  msg_pub_drive.data.capacity = 4;
+  msg_pub_drive.data.size = 4;
+  msg_pub_drive.layout.dim.capacity = 0;
+  msg_pub_drive.layout.dim.size = 0;
+  msg_pub_drive.layout.data_offset = 0;
+
+  msg_pub_statePlatform.data.data = statePlatform_report;
+  msg_pub_statePlatform.data.capacity = 2;
+  msg_pub_statePlatform.data.size = 2;
+  msg_pub_statePlatform.layout.dim.capacity = 0;
+  msg_pub_statePlatform.layout.dim.size = 0;
+  msg_pub_statePlatform.layout.data_offset = 0;
+
+  msg_pub_balance.data.data = balance_report;
+  msg_pub_balance.data.capacity = 4;
+  msg_pub_balance.data.size = 4;
+  msg_pub_balance.layout.dim.capacity = 0;
+  msg_pub_balance.layout.dim.size = 0;
+  msg_pub_balance.layout.data_offset = 0;
+
+  // --- 2. เริ่มต้น Publisher และ Subscription ---
+  RCCHECK(rclc_publisher_init_default(&pub_drive, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stageDrive"));
+  RCCHECK(rclc_publisher_init_default(&pub_statePlatform, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stagePlatform"));  
+  RCCHECK(rclc_publisher_init_default(&pub_balance, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "balance"));  
+  RCCHECK(rclc_publisher_init_default(&pub_stateArm, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "stageArm"));  
+
+  //----------------------------------------------
+  RCCHECK(rclc_subscription_init_default(&sub_motor, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motors"));
+  RCCHECK(rclc_subscription_init_default(&sub_sensors, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "sensors"));
+  RCCHECK(rclc_subscription_init_default(&sub_controller, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "controller"));
+  RCCHECK(rclc_subscription_init_default(&sub_pid, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "pid_parameters"));
+
+  // --- 3. เริ่มต้น Timer และ Executor ---
+  RCCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(20), timer_callback));
+
+  // Executor รองรับ 2 งาน: 1 Subscription + 1 Timer
+  RCCHECK(rclc_executor_init(&executor, &support.context, 6, &allocator));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor, &msg_sub_motor, &motor_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_controller, &msg_sub_controller, &controller_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_sensors, &msg_sub_sensors, &sensors_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_pid, &msg_sub_pid, &pid_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_timer(&executor, &timer));
 }
 
 void loop() {
-  // check_cmd_timeout();
-  // สั่งให้ Executor ทำงาน
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
-
+  // สั่งให้ระบบทำงาน (Spin)
+  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
 }

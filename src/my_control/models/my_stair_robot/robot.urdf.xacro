@@ -4,5 +4,4 @@
     <xacro:include filename="robot_core.xacro" />
     <xacro:include filename="robot_control.xacro" />
     <xacro:include filename="robot_realsensed435i.xacro" />
-
 </robot>
