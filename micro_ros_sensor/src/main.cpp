@@ -10,7 +10,7 @@ rcl_publisher_t pub_motor , pub_sensors;
 
 std_msgs__msg__Float32MultiArray msg_motor , msg_sensors; 
 
-float sensors[7];
+float sensors[9];
 float motor_data[4] = {0.0f, 0.0f, 0.0f, 0.0f,};
 
 void tcaSelect(uint8_t i) {
@@ -92,8 +92,8 @@ void setup() {
     msg_motor.layout.dim.size = 0;
     msg_motor.layout.data_offset = 0;
     // -----------------------------------------------
-    msg_sensors.data.capacity = 7;
-    msg_sensors.data.size = 7;
+    msg_sensors.data.capacity = 9;
+    msg_sensors.data.size = 9;
     msg_sensors.data.data = sensors;
     
     msg_sensors.layout.dim.capacity = 0;

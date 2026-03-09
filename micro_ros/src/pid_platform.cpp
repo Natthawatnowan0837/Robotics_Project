@@ -10,7 +10,7 @@ float Platform_Setpoint = 0.0;
 float Platform_Input = 0.0;    
 float Platform_Output = 0.0;   
 
-float error_sensors = 3.0;
+float error_sensors = 5.0;
 // ปรับ Gain: Kp, Ki, Kd
 float P_Kp = 10.0, P_Ki = 0.0, P_Kd = 0.2; 
 
@@ -48,16 +48,16 @@ void init_plateformPID() {
     Platform_PID.SetSampleTimeUs(5000);
 }
 
-void pid_plateform(float platform_y, float hall_effect, float omega_platform_y) {
+void pid_plateform(float anglePlatformY, float hall_effect) {
     unsigned long now = millis();
     if (now - last_pid_time < pid_interval) return;
     last_pid_time = now;
 
     // --- ส่วนการจัดการ Input และ Deadband ---
-    float process_input = platform_y * -1.0;
+    float process_input = anglePlatformY * -1.0;
     
     // ถ้าเอียงน้อยกว่า 3 องศา ให้ถือว่าตรง (ป้องกันมอเตอร์ครางจี๊ดๆ ตอนอยู่นิ่ง)
-    if (platform_y > -error_sensors && platform_y < error_sensors) {
+    if (anglePlatformY > -error_sensors && anglePlatformY < error_sensors) {
         process_input = Platform_Setpoint; 
     }
     
@@ -89,9 +89,8 @@ void pid_plateform(float platform_y, float hall_effect, float omega_platform_y) 
     Platform_drive(PlatformRight_R, PlatformRight_L, target_pwm * -1.0); 
 
     // Debug ข้อมูลส่งไป micro-ROS
-    msg_pub_balance.data.data[0] = platform_y;
+    msg_pub_balance.data.data[0] = anglePlatformY;
     msg_pub_balance.data.data[1] = target_pwm; 
     msg_pub_balance.data.data[2] = hall_effect;
-    msg_pub_balance.data.data[3] = omega_platform_y;
     RCSOFTCHECK(rcl_publish(&pub_balance, &msg_pub_balance, NULL));
 }

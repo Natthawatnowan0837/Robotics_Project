@@ -7,8 +7,8 @@ void hall_effect() {
   hallState = digitalRead(hallPin);
 
   if (hallState == LOW) {  
-    msg_sensors.data.data[4] = 1; // ส่งข้อมูลว่าเจอแม่เหล็ก
+    msg_sensors.data.data[8] = 1; // ส่งข้อมูลว่าเจอแม่เหล็ก
   } else {
-    msg_sensors.data.data[4] = 0; // ส่งข้อมูลว่าไม่เจอแม่เหล็ก
+    msg_sensors.data.data[8] = 0; // ส่งข้อมูลว่าไม่เจอแม่เหล็ก
   }
 }

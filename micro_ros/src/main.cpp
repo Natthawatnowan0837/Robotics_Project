@@ -22,7 +22,7 @@ std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_controller,msg_sub_sensor
 // float pub_buffer[5]; // จองพื้นที่ส่ง (ปรับจำนวนได้)
 float motor_data[4]; // จองพื้นที่รับ (ปรับจำนวนได้)
 float controller_data[4];
-float sensors_data[7];
+float sensors_data[9];
 float pid_data[12];
 //-------------------
 float drive_report[4];
@@ -40,13 +40,21 @@ float angular_control = 0.0;
 float platform_control = 0.0;
 float arm_control = 0.0;
 //-------------------------
-float body_x = 0.0;
-float body_y = 0.0 ;
-float platform_x = 0.0;
-float platform_y = 0.0; 
-float hall_effect = 0.0;
-float omega_body_y = 0.0;
-float omega_platform_y = 0.0;
+// --- [ ข้อมูล BODY สำหรับ EKF / RTAB-Map ] ---
+float fAccelX = 0.0f;    // Index 0: ความเร่งแกน X (m/s^2) - ผ่าน Filter
+float fAccelY = 0.0f;    // Index 1: ความเร่งแกน Y (m/s^2) - ผ่าน Filter
+float fAccelZ = 0.0f;    // Index 2: ความเร่งแกน Z (m/s^2) - ผ่าน Filter (ปกติ ~9.8)
+
+float body_gyro_x = 0.0f; // Index 3: ความเร็วเชิงมุมแกน X (rad/s) - ลบ Bias แล้ว
+float body_gyro_y = 0.0f; // Index 4: ความเร็วเชิงมุมแกน Y (rad/s) - ลบ Bias แล้ว
+float body_gyro_z = 0.0f; // Index 5: ความเร็วเชิงมุมแกน Z (rad/s) - สำหรับ Yaw Fusion
+
+// --- [ ข้อมูล PLATFORM สำหรับควบคุม / แสดงผล ] ---
+float anglePlatformX = 0.0f; // Index 6: มุมเอียง X (deg) - ผ่าน Filter
+float anglePlatformY = 0.0f; // Index 7: มุมเอียง Y (deg) - ผ่าน Filter
+
+// --- [ ข้อมูลเสริม (ถ้ามี) ] ---
+float hall_effect = 0.0f;    // Index 8: (หากต้องการส่งค่าความเร็วจาก Encoder เพิ่ม)
 //------------------------
 float pid_driveL_parameters[3];
 float pid_driveR_parameters[3];
@@ -55,7 +63,6 @@ float pid_arm_parameters[3];
 
 // --- Callback: เมื่อได้รับข้อมูลจาก ROS 2 ---
 void motor_callback(const void * msgin) {
-  // 1. Cast ข้อมูลที่รับเข้ามาให้เป็นชนิด Float32MultiArray
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
   if (msg->data.size >= 4) {
     motorDrive_L = msg->data.data[0];
@@ -77,13 +84,27 @@ void controller_callback(const void * msgin) {
 
 void sensors_callback(const void * msgin) {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  body_x = sensors_data[0];
-  body_y = sensors_data[1];
-  platform_x = sensors_data[2];
-  platform_y = sensors_data[3]; 
-  hall_effect = sensors_data[4];
-  omega_body_y = sensors_data[5];
-  omega_platform_y == sensors_data[6];
+  
+  // ดึง Pointer ของข้อมูลจากโครงสร้าง Float32MultiArray
+  float * sensors_data = msg->data.data;
+
+  // --- [ จัดเรียง Index ให้ตรงกับฝั่งส่ง (0-7) ] ---
+  
+  // 1. ส่วนของ Body IMU Data (สำหรับ EKF / RTAB-MAP)
+  fAccelX     = sensors_data[0];   // ความเร่งแกน X (m/s^2)
+  fAccelY     = sensors_data[1];   // ความเร่งแกน Y (m/s^2)
+  fAccelZ     = sensors_data[2];   // ความเร่งแกน Z (m/s^2)
+  
+  body_gyro_x = sensors_data[3];   // ความเร็วเชิงมุมแกน X (rad/s)
+  body_gyro_y = sensors_data[4];   // ความเร็วเชิงมุมแกน Y (rad/s)
+  body_gyro_z = sensors_data[5];   // ความเร็วเชิงมุมแกน Z (rad/s) ** หัวใจของ Yaw **
+
+  // 2. ส่วนของ Platform Angle (องศาที่ผ่าน Filter แล้ว)
+  anglePlatformX = sensors_data[6];   // มุมเอียง X (deg)
+  anglePlatformY = sensors_data[7];   // มุมเอียง Y (deg)
+
+  // 3. ส่วนเสริม (ถ้ามี index ที่ 8)
+  hall_effect = sensors_data[8];
 }
 
 void pid_callback(const void * msgin) {
@@ -117,7 +138,7 @@ void pid_callback(const void * msgin) {
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
   if (timer != NULL) {
     pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
-    pid_plateform(platform_y,hall_effect,omega_platform_y);
+    pid_plateform(anglePlatformY,hall_effect);
     // pwm_motor(linear_control,angular_control),pid_drive[3];
     // pwm_platform(platform_control,hall_effect);
     // pwm_arm(arm_control);
@@ -151,7 +172,7 @@ void setup() {
   msg_sub_controller.data.capacity = 4;
 
   msg_sub_sensors.data.data = sensors_data;
-  msg_sub_sensors.data.capacity = 7;
+  msg_sub_sensors.data.capacity = 9;
 
   msg_sub_pid.data.data = pid_data;
   msg_sub_pid.data.capacity = 12;
@@ -202,7 +223,7 @@ void setup() {
   RCCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(20), timer_callback));
 
   // Executor รองรับ 2 งาน: 1 Subscription + 1 Timer
-  RCCHECK(rclc_executor_init(&executor, &support.context, 6, &allocator));
+  RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor, &msg_sub_motor, &motor_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_controller, &msg_sub_controller, &controller_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_sensors, &msg_sub_sensors, &sensors_callback, ON_NEW_DATA));

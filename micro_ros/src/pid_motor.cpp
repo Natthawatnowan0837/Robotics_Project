@@ -31,10 +31,6 @@ void Motor_drive(int pinA, int pinB, float speed) {
     analogWrite(pinB, 0);
   }
 }
-
-/**
- * ตั้งค่าเริ่มต้นสำหรับ PID (เรียกใน setup)
- */
 void init_PID() {
   // ตั้งค่า Tuning เริ่มต้น
   L_wheel_PID.SetTunings(L_Kp, L_Ki, L_Kd);

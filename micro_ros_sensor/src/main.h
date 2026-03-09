@@ -13,7 +13,7 @@
 #include <std_msgs/msg/float32_multi_array.h>
 #include <geometry_msgs/msg/vector3.h> 
 #include <std_msgs/msg/bool.h>
-
+#include <math.h>
 #define TCA_ADDR 0x70
 // Macro
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}

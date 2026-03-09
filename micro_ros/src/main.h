@@ -50,7 +50,7 @@ void init_PID();
 void pid_drive(float linear, float angular, float motorDrive_L, float motorDrive_R);
 
 void init_plateformPID();
-void pid_plateform(float platform_y,float hall_effect,float omega_platform_y);
+void pid_plateform(float anglePlatformY,float hall_effect);
 
 // void pwm_motor(float linear_control,float angular_control);
 // void pwm_platform(float platform_control,float hall_effect);
