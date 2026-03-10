@@ -1,10 +1,6 @@
 digraph G {
-"odom" -> "base_link"[label=" Broadcaster: default_authority\nAverage rate: 60.18\nBuffer length: 5.018\nMost recent transform: 1773037863.448943\nOldest transform: 1773037858.430699\n"];
-"chassis_link" -> "camera_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
-"base_link" -> "chassis_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
-"chassis_link" -> "wheel_castor_back_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
-"chassis_link" -> "wheel_castor_front_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_link" -> "camera_accel_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"chassis_link" -> "camera_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_accel_frame" -> "camera_accel_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_link" -> "camera_gyro_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_gyro_frame" -> "camera_gyro_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
@@ -14,11 +10,15 @@ digraph G {
 "camera_depth_frame" -> "camera_depth_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_link" -> "camera_color_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 "camera_color_frame" -> "camera_color_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
-"chassis_link" -> "wheel_left_link"[label=" Broadcaster: default_authority\nAverage rate: 10.204\nBuffer length: 4.9\nMost recent transform: 1773037863.405998\nOldest transform: 1773037858.505911\n"];
-"chassis_link" -> "wheel_right_link"[label=" Broadcaster: default_authority\nAverage rate: 10.204\nBuffer length: 4.9\nMost recent transform: 1773037863.405998\nOldest transform: 1773037858.505911\n"];
-"map" -> "rtabmap/odom"[label=" Broadcaster: default_authority\nAverage rate: 20.247\nBuffer length: 4.05\nMost recent transform: 1773037863.530265\nOldest transform: 1773037859.480266\n"];
+"odom" -> "base_link"[label=" Broadcaster: default_authority\nAverage rate: 4.164\nBuffer length: 4.803\nMost recent transform: 1773085924.227653\nOldest transform: 1773085919.424815\n"];
+"map" -> "odom"[label=" Broadcaster: default_authority\nAverage rate: 20.213\nBuffer length: 4.7\nMost recent transform: 1773085924.716774\nOldest transform: 1773085920.016764\n"];
+"chassis_link" -> "wheel_left_link"[label=" Broadcaster: default_authority\nAverage rate: 10.21\nBuffer length: 4.408\nMost recent transform: 1773085924.542039\nOldest transform: 1773085920.134425\n"];
+"base_link" -> "chassis_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"chassis_link" -> "wheel_right_link"[label=" Broadcaster: default_authority\nAverage rate: 10.21\nBuffer length: 4.408\nMost recent transform: 1773085924.542039\nOldest transform: 1773085920.134425\n"];
+"chassis_link" -> "wheel_castor_back_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"chassis_link" -> "wheel_castor_front_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
 edge [style=invis];
  subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
-"Recorded at time: 1773037863.470156"[ shape=plaintext ] ;
+"Recorded at time: 1773085924.652798"[ shape=plaintext ] ;
 }->"map";
 }

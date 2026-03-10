@@ -16,7 +16,9 @@ def generate_launch_description():
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'align_depth.enable': 'true'
+            'align_depth.enable': 'true',
+            'depth_module.profile': '640x480x15', # ลดความละเอียดและ FPS (มาตรฐานคือ 30fps ซึ่งหนักไป)
+            'rgb_camera.profile': '640x480x15', 
         }.items()
     )
 

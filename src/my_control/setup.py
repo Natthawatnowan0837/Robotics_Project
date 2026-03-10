@@ -15,7 +15,9 @@ setup(
 
             # ไฟล์ที่อยู่ที่ root ของ maps (เช่น rtabmap.db)
             (os.path.join('share', package_name, 'maps'), glob('maps/*.db')),
-            (os.path.join('share', package_name, 'config'), glob('config/*')),
+            # ส่วนหนึ่งใน data_files ของ setup.py
+            (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+            (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
 
             # ไฟล์ข้างในโฟลเดอร์ floor ต่างๆ
             (os.path.join('share', package_name, 'maps/floor1'), glob('maps/floor1/*')),
@@ -33,9 +35,6 @@ setup(
             (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.xacro')),        
             (os.path.join('share', package_name, 'models/my_stair_robot/meshes'), glob('models/my_stair_robot/meshes/*')),
             
-            # อย่าลืมเพิ่มโฟลเดอร์ launch ด้วยนะครับ!
-            (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-            (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -46,10 +45,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'joystick_control = my_control.xbox_360:main',
+            'xbox_controller_node = my_control.xbox_controller_node:main',
             'params = my_control.params:main',
-            'rps_to_cmd_vel.py = my_control.rps_to_cmd_vel:main',
-            'rl = my_control.rl:main',
+            'imu_bridge = my_control.imu_bridge:main',
+            'obtacle_stop=my_control.obtacle_stop:main',
         ],
     },
 )
