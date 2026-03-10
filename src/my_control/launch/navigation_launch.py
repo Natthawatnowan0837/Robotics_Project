@@ -27,7 +27,6 @@ from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
-    package_name = 'my_control'
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
 
@@ -84,15 +83,11 @@ def generate_launch_description():
         default_value='false',
         description='Use simulation (Gazebo) clock if true')
 
-# หาตำแหน่งที่ตั้งของแพ็คเกจ my_control
-    my_control_dir = get_package_share_directory(package_name)
-
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        # ชี้ไปที่โฟลเดอร์ params ภายในแพ็คเกจ my_control
-        default_value=os.path.join(my_control_dir, 'config', 'nav2_params.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes')
-    
+
     declare_autostart_cmd = DeclareLaunchArgument(
         'autostart', default_value='true',
         description='Automatically startup the nav2 stack')

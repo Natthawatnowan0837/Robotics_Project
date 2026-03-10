@@ -79,17 +79,16 @@ def generate_launch_description():
     database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
 
     # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
+    database_full_path = os.path.expanduser('~/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
+
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
-            # 1. เอา '--delete_db_on_start' ออก เพื่อใช้แผนที่เดิม
-            'rtabmap_args': '', 
-            
-            # 2. ตั้งค่าเป็นโหมด Localization (Mem/IncrementalMemory = false)
+            'database_path': database_full_path,  # <--- ต้องใส่บรรทัดนี้ครับ
             'localization': 'true', 
-            
+            'rtabmap_args': '--Mem/IncrementalMemory false', # บังคับโหมดอ่านอย่างเดียว
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
@@ -102,6 +101,23 @@ def generate_launch_description():
         }.items()
     )
 
+    # nav2_params_path = os.path.join(
+    #     get_package_share_directory(package_name), 'config', 'nav2_params.yaml')
+
+    # navigation = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource([os.path.join(
+    #         get_package_share_directory('nav2_bringup'), 'launch', 'navigation_launch.py'
+    #     )]),
+    #     launch_arguments={
+    #         'use_sim_time': 'false',
+    #         'params_file': nav2_params_path,
+    #         'autostart': 'true',
+    #         'use_amcl': 'false',
+    #         'map': '/rtabmap/map',
+    #             # <--- เพิ่มบรรทัดนี้เพื่อปิด AMCL
+    #     }.items()
+    # )
+
     return LaunchDescription([
         realsense,
         rsp,
@@ -112,4 +128,5 @@ def generate_launch_description():
         # static_tf,
         # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
         TimerAction(period=3.0, actions=[rtabmap]),
+        # TimerAction(period=15.0, actions=[navigation]),
     ])
