@@ -49,6 +49,7 @@ setup(
             'params = my_control.params:main',
             'imu_bridge = my_control.imu_bridge:main',
             'obtacle_stop=my_control.obtacle_stop:main',
+            'cmd=my_control.cmd:main'
         ],
     },
 )

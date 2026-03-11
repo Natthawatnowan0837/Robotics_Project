@@ -7,10 +7,11 @@ rcl_node_t node;
 rclc_executor_t executor;
 rcl_timer_t timer;
 rcl_publisher_t pub_motor , pub_sensors;
-
 std_msgs__msg__Float32MultiArray msg_motor , msg_sensors; 
 
-float sensors[9];
+MS5611 ms5611(0x77);
+
+float sensors[10];
 float motor_data[4] = {0.0f, 0.0f, 0.0f, 0.0f,};
 
 void tcaSelect(uint8_t i) {
@@ -35,6 +36,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
         Encoder_arm();
         Gyro();
         hall_effect();
+        pressure();
 
         // 2. Publish ข้อมูลที่อ่านได้
         RCSOFTCHECK(rcl_publish(&pub_motor, &msg_motor, NULL));
@@ -79,6 +81,9 @@ void setup() {
     tcaSelect(4); as5600_arm.begin();
     delay(10);
     tcaSelect(5); as5600_arm.begin();
+    delay(10);
+    tcaSelect(6); ms5611.begin();
+    delay(10);
     // tcaSelect(6); pressure.begin();
     calibrateSensors();
     allocator = rcl_get_default_allocator();
@@ -92,13 +97,23 @@ void setup() {
     msg_motor.layout.dim.size = 0;
     msg_motor.layout.data_offset = 0;
     // -----------------------------------------------
-    msg_sensors.data.capacity = 9;
-    msg_sensors.data.size = 9;
+    msg_sensors.data.capacity = 10;
+    msg_sensors.data.size = 10;
     msg_sensors.data.data = sensors;
     
     msg_sensors.layout.dim.capacity = 0;
     msg_sensors.layout.dim.size = 0;
     msg_sensors.layout.data_offset = 0;
+
+if (ms5611.begin()) {
+        // หัวใจสำคัญ: เลข 1 ใน reset(1) คือการเปิด Adjusted Math
+        ms5611.reset(1); 
+        // ตั้งค่าความละเอียดสูงสุดเพื่อความแม่นยำ
+        ms5611.setOversampling(OSR_ULTRA_HIGH); 
+        Serial.println("MS5611 Initialized with Adjusted Math.");
+    } else {
+        Serial.println("MS5611 NOT found on Channel 6!");
+    }
 
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
     RCCHECK(rclc_node_init_default(&node, "esp32_sensor_node", "", &support));

@@ -13,11 +13,13 @@ rclc_executor_t executor;
 rcl_timer_t timer;
 
 rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
-rcl_subscription_t sub_motor,sub_controller,sub_sensors,sub_pid;
+rcl_subscription_t sub_motor,sub_controller,sub_sensors,sub_pid,
+                    sub_cmd_vel;
 
 std_msgs__msg__Float32 msg_pub_stateArm;
 std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; // สำหรับส่งออก
-std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_controller,msg_sub_sensors,msg_sub_pid; // สำหรับรับเข้า
+std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_sensors,msg_sub_pid; // สำหรับรับเข้า
+geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_controller;
 
 // float pub_buffer[5]; // จองพื้นที่ส่ง (ปรับจำนวนได้)
 float motor_data[4]; // จองพื้นที่รับ (ปรับจำนวนได้)
@@ -39,6 +41,10 @@ float linear_control = 0.0;
 float angular_control = 0.0;
 float platform_control = 0.0;
 float arm_control = 0.0;
+
+//-------------------------
+float current_linear_x = 0.0f;
+float current_angular_z = 0.0f;
 //-------------------------
 // --- [ ข้อมูล BODY สำหรับ EKF / RTAB-Map ] ---
 float fAccelX = 0.0f;    // Index 0: ความเร่งแกน X (m/s^2) - ผ่าน Filter
@@ -72,15 +78,6 @@ void motor_callback(const void * msgin) {
   }
 }
 
-void controller_callback(const void * msgin) {
-  const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  if (msg->data.size >= 4) {
-    linear_control   = msg->data.data[0];
-    angular_control  = msg->data.data[1];
-    platform_control = msg->data.data[2];
-    arm_control      = msg->data.data[3]; 
-  }
-}
 
 void sensors_callback(const void * msgin) {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
@@ -134,10 +131,27 @@ void pid_callback(const void * msgin) {
     pid_arm_parameters[2] = msg->data.data[11];
   }
 }
+
+void cmd_vel_callback(const void * msgin) {
+  // 1. Cast ข้อมูลจาก void pointer เป็น Twist message
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  
+  // 2. อัปเดตค่าลงใน Global Variable (ห้ามใส่คำว่า float ข้างหน้า)
+  current_linear_x  = (float)msg->linear.x;  
+  current_angular_z = (float)msg->angular.z; 
+}
+
+void controller_callback(const void * msgin) {
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  linear_control  = (float)msg->linear.x;  
+  angular_control = (float)msg->angular.z; 
+}
+
 // --- Timer: สำหรับส่งข้อมูลออก (ทำงานทุก 20ms หรือ 50Hz) ---
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
   if (timer != NULL) {
-    pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
+    // pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
+    pid_drive(current_linear_x,current_angular_z,motorDrive_L,motorDrive_R);
     pid_plateform(anglePlatformY,hall_effect);
     // pwm_motor(linear_control,angular_control),pid_drive[3];
     // pwm_platform(platform_control,hall_effect);
@@ -167,9 +181,6 @@ void setup() {
 
   msg_sub_motor.data.data = motor_data;
   msg_sub_motor.data.capacity = 4;
-  
-  msg_sub_controller.data.data = controller_data;
-  msg_sub_controller.data.capacity = 4;
 
   msg_sub_sensors.data.data = sensors_data;
   msg_sub_sensors.data.capacity = 9;
@@ -214,10 +225,12 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motors"));
   RCCHECK(rclc_subscription_init_default(&sub_sensors, &node, 
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "sensors"));
-  RCCHECK(rclc_subscription_init_default(&sub_controller, &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "controller"));
   RCCHECK(rclc_subscription_init_default(&sub_pid, &node, 
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "pid_parameters"));
+  RCCHECK(rclc_subscription_init_default(&sub_controller, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "controller"));
+  RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
 
   // --- 3. เริ่มต้น Timer และ Executor ---
   RCCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(20), timer_callback));
@@ -228,6 +241,7 @@ void setup() {
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_controller, &msg_sub_controller, &controller_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_sensors, &msg_sub_sensors, &sensors_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_pid, &msg_sub_pid, &pid_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &cmd_vel_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
 }
 

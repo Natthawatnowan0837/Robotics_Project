@@ -7,9 +7,13 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression # เพิ่ม LaunchConfiguration เข้าไป
 def generate_launch_description():
     package_name = 'my_control'
-    # 1. กล้อง RealSense
-# ... ภายในฟังก์ชัน generate_launch_description ...
 
+    rviz_config_path = os.path.join(
+        get_package_share_directory(package_name),
+        'rviz',
+        'localize.rviz'
+    )
+    
     realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
@@ -22,8 +26,6 @@ def generate_launch_description():
             'unite_imu_method': '1',
             'enable_sync': 'true',
             'depth_module.depth_visualization': 'true', # แถม: สำหรับดูภาพใน RViz ง่ายขึ้น
-            # หากต้องการจำกัดระยะ 4 เมตรตามคอมเมนต์ของคุณ:
-            # 'clip_distance': '4.0' 
         }.items()
     )
 
@@ -63,18 +65,6 @@ def generate_launch_description():
             parameters=[{'mode': 'map'}], # ส่ง parameter (optional)
             output='screen' # ให้แสดง log บนหน้าจอ terminal
     )
-    # navigation_launch = IncludeLaunchDescription(
-    #             PythonLaunchDescriptionSource([os.path.join(
-    #                 get_package_share_directory(package_name), 'launch', 'navigation_launch.py'
-    #             )]), launch_arguments={'use_sim_time': 'false'}.items()
-    # )
-
-    # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
-    # static_tf = Node(
-    #     package='tf2_ros',
-    #     executable='static_transform_publisher',
-    #     arguments=['0.0', '0.0', '0.0', '-1.5708', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
-    # )
 
     database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
 
@@ -84,6 +74,7 @@ def generate_launch_description():
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
+            'database_path': database_full_path,
             'rtabmap_args': '--delete_db_on_start', # นี่คือตัวแทนของ '-d' เพื่อลบแผนที่เก่าและเริ่มใหม่
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
@@ -93,7 +84,8 @@ def generate_launch_description():
             'imu_topic': '/rtabmap/imu',
             'wait_imu_to_init': 'true',
             'qos': '1', # 1 = RMW_QOS_POLICY_RELIABILITY_RELIABLE
-            'rviz': 'true' # เปิด RViz อัตโนมัติหรือไม่ (ตั้งเป็น false ได้ถ้าจะรันแยก)
+            'rviz': 'true', # เปิด RViz อัตโนมัติหรือไม่ (ตั้งเป็น false ได้ถ้าจะรันแยก)
+            'rviz_cfg': rviz_config_path 
         }.items()
     )
 

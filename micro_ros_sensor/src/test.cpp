@@ -1,74 +1,70 @@
 // #include <Arduino.h>
 // #include <Wire.h>
+// #include "MS5611.h"
 
 // #define TCAADDR 0x70
+// #define MS5611_CHANNEL 6
+
+// // สร้าง Object สำหรับ MS5611 (ระบุ Address 0x77 หรือ 0x76 ตามโมดูลของคุณ)
+// MS5611 ms5611(0x77); 
 
 // // ฟังก์ชันเลือกช่อง (Channel) ของ TCA
 // void tcaSelect(uint8_t i) {
 //     if (i > 7) return;
 //     Wire.beginTransmission(TCAADDR);
 //     Wire.write(1 << i);
-//     if (Wire.endTransmission() != 0) {
-//         Serial.printf("Error: Cannot communicate with TCA at Channel %d\n", i);
-//     }
-// }
-
-// // ฟังก์ชันปิดทุกช่อง เพื่อล้างสถานะ Bus
-// void tcaOff() {
-//     Wire.beginTransmission(TCAADDR);
-//     Wire.write(0);
 //     Wire.endTransmission();
 // }
 
 // void setup() {
 //     Serial.begin(115200);
-//     delay(2000);
+//     while (!Serial);
     
-//     // เริ่มต้น I2C ที่ขา 21, 22
 //     Wire.begin(21, 22);
-//     Wire.setClock(100000); // ใช้ความเร็วต่ำ 100kHz เพื่อความเสถียร
+//     Wire.setClock(100000); // 100kHz เพื่อความเสถียร
 
-//     Serial.println("\n========================================");
-//     Serial.println("   TCA9548A & I2C DEVICE SCANNER");
-//     Serial.println("========================================");
+//     Serial.println("\n--- MS5611 with TCA9548A (Channel 6) ---");
 
-//     // --- ส่วนเช็คว่าเจอตัว TCA9548A หลักไหม ---
-//     Wire.beginTransmission(TCAADDR);
-//     if (Wire.endTransmission() == 0) {
-//         Serial.println("[  OK  ] TCA9548A found at Address 0x70");
+//     // 1. เลือกช่อง 6 ก่อนเริ่มจัดการเซนเซอร์
+//     tcaSelect(MS5611_CHANNEL);
+//     delay(10);
+
+//     // 2. เริ่มต้น MS5611
+//     if (ms5611.begin() == true) {
+//         Serial.print("MS5611 found at Channel ");
+//         Serial.println(MS5611_CHANNEL);
 //     } else {
-//         Serial.println("[FAILED] TCA9548A NOT FOUND!");
-//         Serial.println(">>> Check: SDA(21), SCL(22), Power(3.3V), and Reset Pin (RST to 3.3V)");
-//         while(1) delay(1000); // ถ้าไม่เจอตัวหลัก ให้หยุดรอเช็คสาย
+//         Serial.println("MS5611 NOT found. Check wiring on Channel 6!");
+//         while (1);
 //     }
+
+//     // 3. เปิดโหมด Adjusted Math (โหมดพิเศษของ Rob Tillaart)
+//     // การใส่พารามิเตอร์ 1 ใน reset() จะเปิดใช้งานสูตรคำนวณที่แม่นยำขึ้น
+//     ms5611.reset(1); 
+    
+//     // ตั้งค่าความละเอียดสูงสุด (Ultra High Oversampling)
+//     ms5611.setOversampling(OSR_ULTRA_HIGH);
 // }
 
 // void loop() {
-//     Serial.println("\n--- Scanning all 8 Channels ---");
+//     // เลือกช่อง 6 ทุกครั้งก่อนอ่านค่า (กรณีมีเซนเซอร์ช่องอื่นด้วย)
+//     tcaSelect(MS5611_CHANNEL);
 
-//     for (uint8_t chan = 0; chan < 8; chan++) {
-//         tcaOff();      // ปิดช่องก่อนหน้า
-//         delay(5);      // ให้เวลา Bus เคลียร์สัญญาณ
-//         tcaSelect(chan); // เปิดช่องที่จะสแกน
+//     // อ่านค่าจากเซนเซอร์
+//     int result = ms5611.read();
+
+//     if (result == MS5611_READ_OK) {
+//         Serial.print("Temperature: ");
+//         Serial.print(ms5611.getTemperature(), 2);
+//         Serial.print(" °C\t");
         
-//         Serial.print("Channel "); Serial.print(chan); Serial.print(": ");
-        
-//         int devicesFound = 0;
-//         for (uint8_t addr = 1; addr < 127; addr++) {
-//             if (addr == TCAADDR) continue; // ข้าม Address ของตัว TCA เอง
-
-//             Wire.beginTransmission(addr);
-//             if (Wire.endTransmission() == 0) {
-//                 Serial.printf("[0x%02X] ", addr);
-//                 devicesFound++;
-//             }
-//         }
-
-//         if (devicesFound == 0) Serial.print("No devices");
-//         Serial.println();
+//         Serial.print("Pressure: ");
+//         Serial.print(ms5611.getPressure(), 2);
+//         Serial.println(" hPa");
+//     } else {
+//         Serial.print("Error in read: ");
+//         Serial.println(result);
 //     }
 
-//     Serial.println("----------------------------------------");
-//     Serial.println("Scanning again in 5 seconds...");
-//     delay(5000); 
+//     delay(1000); // รอ 1 วินาทีก่อนอ่านค่าถัดไป
 // }

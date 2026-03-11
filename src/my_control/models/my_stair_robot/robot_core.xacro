@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <xacro:property name="chassis_length" value="2.0"/>
-    <xacro:property name="chassis_width"  value="1.6"/>
+    <xacro:property name="chassis_length" value="1.0"/>
+    <xacro:property name="chassis_width"  value="0.8"/>
     <xacro:property name="chassis_height" value="0.04"/>
-    <xacro:property name="chassis_mass"   value="5.0"/>
+    <xacro:property name="chassis_mass"   value="4.0"/>
 
     <xacro:property name="wheel_radius"   value="0.10"/>
     <xacro:property name="wheel_length"   value="0.04"/>
     <xacro:property name="wheel_mass"     value="0.5"/>
-    <xacro:property name="wheel_offset_y" value="0.83"/>
+    <xacro:property name="wheel_offset_y" value="0.415"/>
 
     <xacro:property name="castor_radius"  value="0.095"/>
     <xacro:property name="castor_mass"    value="0.2"/>
@@ -37,7 +37,7 @@
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <mass value="${chassis_mass}"/>
-            <inertia ixx="1.0673" ixy="0.0" ixz="0.0" iyy="1.6673" iyz="0.0" izz="2.7333"/>
+            <inertia ixx="0.21386" ixy="0.0" ixz="0.0" iyy="0.33386" iyz="0.0" izz="0.54666"/>
         </inertial>
     </link>
 
@@ -108,7 +108,7 @@
     <joint name="wheel_castor_front_joint" type="fixed">
         <parent link="chassis_link"/>
         <child link="wheel_castor_front_link"/>
-        <origin xyz="0.95 0 0" rpy="0 0 0"/>
+        <origin xyz="0.40 0 0" rpy="0 0 0"/>
     </joint>
 
     <gazebo reference="wheel_castor_front_link"> <material>Gazebo/Red</material> </gazebo>
@@ -122,7 +122,7 @@
     <joint name="wheel_castor_back_joint" type="fixed">
         <parent link="chassis_link"/>
         <child link="wheel_castor_back_link"/>
-        <origin xyz="-0.95 0 0" rpy="0 0 0"/>
+        <origin xyz="-0.40 0 0" rpy="0 0 0"/>
     </joint>
 
     <gazebo reference="wheel_castor_back_link"> <material>Gazebo/Red</material> </gazebo>

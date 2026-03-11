@@ -7,6 +7,12 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression # เพิ่ม LaunchConfiguration เข้าไป
 def generate_launch_description():
     package_name = 'my_control'
+
+    rviz_config_path = os.path.join(
+        get_package_share_directory(package_name),
+        'rviz',
+        'localize.rviz'
+    )
     # 1. กล้อง RealSense
 # ... ภายในฟังก์ชัน generate_launch_description ...
 
@@ -22,8 +28,6 @@ def generate_launch_description():
             'unite_imu_method': '1',
             'enable_sync': 'true',
             'depth_module.depth_visualization': 'true', # แถม: สำหรับดูภาพใน RViz ง่ายขึ้น
-            # หากต้องการจำกัดระยะ 4 เมตรตามคอมเมนต์ของคุณ:
-            # 'clip_distance': '4.0' 
         }.items()
     )
 
@@ -56,29 +60,14 @@ def generate_launch_description():
         ]
     )
 
-    controller =  Node(
-            package='my_control', # ชื่อ package
-            executable='xbox_controller_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
-            name='xbox_controller_node', # ชื่อ node ตอนรัน (optional)
-            parameters=[{'mode': 'map'}], # ส่ง parameter (optional)
-            output='screen' # ให้แสดง log บนหน้าจอ terminal
-    )
-    # navigation_launch = IncludeLaunchDescription(
-    #             PythonLaunchDescriptionSource([os.path.join(
-    #                 get_package_share_directory(package_name), 'launch', 'navigation_launch.py'
-    #             )]), launch_arguments={'use_sim_time': 'false'}.items()
+    # controller =  Node(
+    #         package='my_control', # ชื่อ package
+    #         executable='xbox_controller_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
+    #         name='xbox_controller_node', # ชื่อ node ตอนรัน (optional)
+    #         parameters=[{'mode': 'map'}], # ส่ง parameter (optional)
+    #         output='screen' # ให้แสดง log บนหน้าจอ terminal
     # )
 
-    # 3. Static TF สำหรับเชื่อม IMU กับกล้อง
-    # static_tf = Node(
-    #     package='tf2_ros',
-    #     executable='static_transform_publisher',
-    #     arguments=['0.0', '0.0', '0.0', '-1.5708', '0.0', '0.0', 'camera_link', 'camera_imu_optical_frame']
-    # )
-
-    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
-
-    # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
     database_full_path = os.path.expanduser('~/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
 
     rtabmap = IncludeLaunchDescription(
@@ -97,9 +86,12 @@ def generate_launch_description():
             'imu_topic': '/rtabmap/imu',
             'wait_imu_to_init': 'true',
             'qos': '1',
-            'rviz': 'true'
+            'rviz': 'true',
+            'rviz_cfg': rviz_config_path 
         }.items()
     )
+
+
 
     # nav2_params_path = os.path.join(
     #     get_package_share_directory(package_name), 'config', 'nav2_params.yaml')
@@ -123,7 +115,7 @@ def generate_launch_description():
         rsp,
         node_joint_state_publisher,
         imu_filter,
-        controller,
+        # controller,
         # navigation_launch,
         # static_tf,
         # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
