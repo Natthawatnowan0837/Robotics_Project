@@ -24,12 +24,12 @@ geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_controller;
 // float pub_buffer[5]; // จองพื้นที่ส่ง (ปรับจำนวนได้)
 float motor_data[4]; // จองพื้นที่รับ (ปรับจำนวนได้)
 float controller_data[4];
-float sensors_data[9];
+float sensors_data[10];
 float pid_data[12];
 //-------------------
 float drive_report[4];
 float statePlatform_report[2];
-float balance_report[4];
+float balance_report[3];
 
 //------------------------
 float motorDrive_L = 0.0; 
@@ -61,6 +61,7 @@ float anglePlatformY = 0.0f; // Index 7: มุมเอียง Y (deg) - ผ�
 
 // --- [ ข้อมูลเสริม (ถ้ามี) ] ---
 float hall_effect = 0.0f;    // Index 8: (หากต้องการส่งค่าความเร็วจาก Encoder เพิ่ม)
+
 //------------------------
 float pid_driveL_parameters[3];
 float pid_driveR_parameters[3];
@@ -82,26 +83,20 @@ void motor_callback(const void * msgin) {
 void sensors_callback(const void * msgin) {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
   
-  // ดึง Pointer ของข้อมูลจากโครงสร้าง Float32MultiArray
-  float * sensors_data = msg->data.data;
+  // ตรวจสอบว่าข้อมูลส่งมาอย่างน้อย 9 ตัว (Index 0-8)
+  if (msg->data.size >= 9) {
+    float * sensors_data = msg->data.data;
 
-  // --- [ จัดเรียง Index ให้ตรงกับฝั่งส่ง (0-7) ] ---
-  
-  // 1. ส่วนของ Body IMU Data (สำหรับ EKF / RTAB-MAP)
-  fAccelX     = sensors_data[0];   // ความเร่งแกน X (m/s^2)
-  fAccelY     = sensors_data[1];   // ความเร่งแกน Y (m/s^2)
-  fAccelZ     = sensors_data[2];   // ความเร่งแกน Z (m/s^2)
-  
-  body_gyro_x = sensors_data[3];   // ความเร็วเชิงมุมแกน X (rad/s)
-  body_gyro_y = sensors_data[4];   // ความเร็วเชิงมุมแกน Y (rad/s)
-  body_gyro_z = sensors_data[5];   // ความเร็วเชิงมุมแกน Z (rad/s) ** หัวใจของ Yaw **
-
-  // 2. ส่วนของ Platform Angle (องศาที่ผ่าน Filter แล้ว)
-  anglePlatformX = sensors_data[6];   // มุมเอียง X (deg)
-  anglePlatformY = sensors_data[7];   // มุมเอียง Y (deg)
-
-  // 3. ส่วนเสริม (ถ้ามี index ที่ 8)
-  hall_effect = sensors_data[8];
+    fAccelX     = sensors_data[0];
+    fAccelY     = sensors_data[1];
+    fAccelZ     = sensors_data[2];
+    body_gyro_x = sensors_data[3];
+    body_gyro_y = sensors_data[4];
+    body_gyro_z = sensors_data[5];
+    anglePlatformX = sensors_data[6];
+    anglePlatformY = sensors_data[7];
+    hall_effect    = sensors_data[8];
+  }
 }
 
 void pid_callback(const void * msgin) {
@@ -183,7 +178,7 @@ void setup() {
   msg_sub_motor.data.capacity = 4;
 
   msg_sub_sensors.data.data = sensors_data;
-  msg_sub_sensors.data.capacity = 9;
+  msg_sub_sensors.data.capacity = 10;
 
   msg_sub_pid.data.data = pid_data;
   msg_sub_pid.data.capacity = 12;
@@ -204,8 +199,8 @@ void setup() {
   msg_pub_statePlatform.layout.data_offset = 0;
 
   msg_pub_balance.data.data = balance_report;
-  msg_pub_balance.data.capacity = 4;
-  msg_pub_balance.data.size = 4;
+  msg_pub_balance.data.capacity = 3;
+  msg_pub_balance.data.size = 3;
   msg_pub_balance.layout.dim.capacity = 0;
   msg_pub_balance.layout.dim.size = 0;
   msg_pub_balance.layout.data_offset = 0;

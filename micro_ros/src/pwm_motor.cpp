@@ -1,7 +1,7 @@
 // #include "main.h"
 
 // void Motor_drive(int pinA, int pinB, float speed) {
-//   speed = constrain(speed, -30, 30);
+//   speed = constrain(speed, -255, 255);
 //   if (speed > 0) {
 //     analogWrite(pinA, speed);
 //     analogWrite(pinB, 0);
@@ -13,7 +13,7 @@
 //     analogWrite(pinB, 0);
 //   }
 // }
-
+// // 
 // void pwm_motor(float linear, float angular) {
 //   // 1. ตรวจสอบ Deadzone (ถ้าค่าน้อยมากให้หยุดมอเตอร์ทันที)
 //   if (abs(linear) < 0.05f && abs(angular) < 0.05f) {
@@ -42,8 +42,8 @@
 
 //   // 5. ส่งค่ากลับไป ROS เพื่อตรวจสอบ
 
-// //   msg_vel_out.data.data[0] = pwm_l;
-// //   msg_vel_out.data.data[1] = pwm_r;
-// //   RCSOFTCHECK(rcl_publish(&pub_vel_out, &msg_vel_out, NULL));
+//   msg_pub_drive.data.data[0] = pwm_l;
+//   msg_pub_drive.data.data[1] = pwm_r;
+//   RCSOFTCHECK(rcl_publish(&pub_drive, &msg_pub_drive, NULL));
 // }
 
