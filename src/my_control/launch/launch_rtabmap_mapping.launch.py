@@ -31,8 +31,8 @@ def generate_launch_description():
 
     rsp = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([os.path.join(
-                    get_package_share_directory(package_name), 'launch', 'rsp.launch.py'
-                )]), launch_arguments={'use_sim_time': 'false'}.items()
+                    get_package_share_directory('my_sim'), 'launch', 'rsp.launch.py'
+                )]), launch_arguments={'use_sim_time': 'false'}.items() # เปลี่ยนเป็น false
     )
     
     node_joint_state_publisher = Node(
@@ -65,27 +65,27 @@ def generate_launch_description():
             parameters=[{'mode': 'map'}], # ส่ง parameter (optional)
             output='screen' # ให้แสดง log บนหน้าจอ terminal
     )
+    # เพิ่ม .db ต่อท้ายชื่อไฟล์ที่ต้องการบันทึก
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/back.db')
 
-    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
-
-    # 4. RTAB-Map (ส่วนที่เพิ่มเข้ามา)
+    # 4. RTAB-Map (ปรับปรุงให้เหมือน Terminal)
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
             'database_path': database_full_path,
-            'rtabmap_args': '--delete_db_on_start', # นี่คือตัวแทนของ '-d' เพื่อลบแผนที่เก่าและเริ่มใหม่
+            'rtabmap_args': '--delete_db_on_start', 
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
             'frame_id': 'base_link',
-            'approx_sync': 'false', # ใช้ false เพราะเราเปิด sync ที่ตัวกล้องแล้ว
+            'approx_sync': 'true',         # ตั้งเป็น true เพื่อความยืดหยุ่นในการรับข้อมูล
+            'wait_imu_to_init': 'true',    # รอ IMU ให้พร้อมก่อนเริ่ม SLAM
             'imu_topic': '/rtabmap/imu',
-            'wait_imu_to_init': 'true',
-            'qos': '1', # 1 = RMW_QOS_POLICY_RELIABILITY_RELIABLE
-            'rviz': 'true', # เปิด RViz อัตโนมัติหรือไม่ (ตั้งเป็น false ได้ถ้าจะรันแยก)
-            'rviz_cfg': rviz_config_path 
+            'qos': '1',
+            'rviz': 'true',                # เปิด RViz อัตโนมัติ
+            'rviz_cfg': rviz_config_path   # ใช้ไฟล์ config ที่คุณตั้งไว้
         }.items()
     )
 
@@ -95,8 +95,6 @@ def generate_launch_description():
         node_joint_state_publisher,
         imu_filter,
         controller,
-        # navigation_launch,
-        # static_tf,
-        # แนะนำให้ใช้ TimerAction หน่วงเวลา RTAB-Map เล็กน้อยเพื่อให้กล้องและ IMU พร้อมก่อน
+        # ใช้ TimerAction เพื่อรอให้ Realsense และ IMU Filter ปล่อยข้อมูลออกมาก่อน 3 วินาที
         TimerAction(period=3.0, actions=[rtabmap]),
     ])

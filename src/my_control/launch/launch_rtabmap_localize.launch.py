@@ -33,8 +33,8 @@ def generate_launch_description():
 
     rsp = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([os.path.join(
-                    get_package_share_directory(package_name), 'launch', 'rsp.launch.py'
-                )]), launch_arguments={'use_sim_time': 'false'}.items()
+                    get_package_share_directory('my_sim'), 'launch', 'rsp.launch.py'
+                )]), launch_arguments={'use_sim_time': 'false'}.items() # เปลี่ยนเป็น false
     )
     
     node_joint_state_publisher = Node(
@@ -68,7 +68,8 @@ def generate_launch_description():
     #         output='screen' # ให้แสดง log บนหน้าจอ terminal
     # )
 
-    database_full_path = os.path.expanduser('~/Robotics_Project/src/my_control/map/floor1/back/rtabmap.db')
+    # เพิ่ม .db ต่อท้ายชื่อไฟล์ที่ต้องการบันทึก
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/back.db')
 
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
@@ -82,7 +83,7 @@ def generate_launch_description():
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
             'frame_id': 'base_link',
-            'approx_sync': 'false', 
+            'approx_sync': 'true', 
             'imu_topic': '/rtabmap/imu',
             'wait_imu_to_init': 'true',
             'qos': '1',

@@ -3,85 +3,93 @@
 
 import rclpy
 from rclpy.node import Node
-# เปลี่ยนจาก Float32MultiArray เป็น Twist
-from geometry_msgs.msg import Twist 
-import pygame
-import os
+from geometry_msgs.msg import Twist
+from pynput import keyboard
 
-class XboxControllerNode(Node):
+class KeyboardControllerNode(Node):
     def __init__(self):
-        super().__init__('xbox_controller_node')
+        super().__init__('keyboard_controller_node')
         
-        self.declare_parameter('mode', 'default')
-        current_mode = self.get_parameter('mode').get_parameter_value().string_value
-        self.get_logger().info(f"--- Starting Node with Mode: {current_mode} ---")
-
         # --- [ Configuration ] ---
-        if current_mode == 'map':
-            self.cfg = {
-                'linear_max':  10.0,
-                'angular_max': 10.0,
-                'deadzone': 0.1,
-                'arm_speed': 0.5  # เพิ่มให้ครบเพื่อกัน Error
-            }
-        else:
-            self.cfg = {
-                'linear_max':  10.0,
-                'angular_max': 10.0,
-                'deadzone': 0.1,
-                'arm_speed': 1.0
-            }
-
-        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        # ปรับค่าความเร็วตรงนี้ให้เหมาะกับหุ่นยนต์ของคุณ
+        self.declare_parameter('linear_speed', 0.3) 
+        self.declare_parameter('angular_speed', 0.3)
         
-        # เปลี่ยน Topic name เป็น 'cmd_vel' (มาตรฐาน ROS 2) และใช้ Twist
+        self.linear_max = self.get_parameter('linear_speed').value
+        self.angular_max = self.get_parameter('angular_speed').value
+
+        self.get_logger().info(f"--- Keyboard Controller Started ---")
+        self.get_logger().info(f"Use WASD to move. Press 'ESC' to stop node.")
+        self.get_logger().info(f"Current Config: Linear {self.linear_max}, Angular {self.angular_max}")
+
         self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         
-        pygame.init()
-        pygame.joystick.init()
+        # เก็บสถานะการกดปุ่ม
+        self.pressed_keys = set()
         
-        if pygame.joystick.get_count() == 0:
-            self.get_logger().error("--- ไม่พบจอย Xbox! ---")
-            return
-            
-        self.joy = pygame.joystick.Joystick(0)
-        self.joy.init()
-        self.get_logger().info(f"--- Config Applied: Linear {self.cfg['linear_max']}, Angular {self.cfg['angular_max']} ---")
-        self.timer = self.create_timer(0.05, self.controller_loop)
+        # เริ่มต้นฟังเสียงจากคีย์บอร์ด (Non-blocking)
+        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        self.listener.start()
+        
+        # Timer สำหรับส่งคำสั่ง cmd_vel อย่างต่อเนื่อง (20Hz)
+        self.timer = self.create_timer(0.05, self.publish_cmd_vel)
 
-    def controller_loop(self):
-        pygame.event.pump()
-        
-        # สร้าง Message object ชนิด Twist
+    def on_press(self, key):
+        try:
+            if hasattr(key, 'char'):
+                self.pressed_keys.add(key.char.lower())
+        except Exception:
+            pass
+
+    def on_release(self, key):
+        try:
+            if hasattr(key, 'char'):
+                char = key.char.lower()
+                if char in self.pressed_keys:
+                    self.pressed_keys.remove(char)
+            
+            # กด ESC เพื่อปิดโปรแกรม
+            if key == keyboard.Key.esc:
+                self.get_logger().info("Exiting...")
+                rclpy.shutdown()
+        except Exception:
+            pass
+
+    def publish_cmd_vel(self):
         twist = Twist()
-
-        # อ่านค่าจาก Joystick (Linear=แกน Y, Angular=แกน X ของจอยขวา/ซ้าย)
-        raw_linear = -self.joy.get_axis(1)  # แกนเดินหน้า-ถอยหลัง
-        raw_angular = -self.joy.get_axis(2) # แกนหมุนตัว
         
-        # ใส่ค่าลงใน Twist (linear.x และ angular.z)
-        if abs(raw_linear) > self.cfg['deadzone']:
-            twist.linear.x = float(raw_linear * self.cfg['linear_max'])
-            
-        if abs(raw_angular) > self.cfg['deadzone']:
-            twist.angular.z = float(raw_angular * self.cfg['angular_max'])
+        # คำนวณความเร็วจากปุ่มที่กด
+        linear_val = 0.0
+        angular_val = 0.0
 
-        # หมายเหตุ: Twist ไม่มีฟิลด์สำหรับ Arm หรือ D-pad โดยตรง 
-        # หากต้องการส่งค่าแขนกลด้วย แนะนำให้ใช้ Topic แยก หรือใช้ Custom Message
+        if 'w' in self.pressed_keys:
+            linear_val += self.linear_max
+        if 's' in self.pressed_keys:
+            linear_val -= self.linear_max
+        if 'a' in self.pressed_keys:
+            angular_val += self.angular_max
+        if 'd' in self.pressed_keys:
+            angular_val -= self.angular_max
+
+        twist.linear.x = float(linear_val)
+        twist.angular.z = float(angular_val)
         
         self.cmd_vel_pub.publish(twist)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = XboxControllerNode()
+    node = KeyboardControllerNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        pygame.quit()
+        # ส่งค่า 0 เพื่อหยุดหุ่นยนต์ก่อนปิด Node
+        stop_msg = Twist()
+        node.cmd_vel_pub.publish(stop_msg)
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

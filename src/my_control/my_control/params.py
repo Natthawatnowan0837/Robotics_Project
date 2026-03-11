@@ -26,8 +26,8 @@ class PIDManagerNode(Node):
         
         # ตั้งค่า PID [P, I, D]
         self.pid_values = [
-            1.0, 0.0, 0.0,   # Drive_L (ลองเริ่มที่ 10 ตามที่คุณถาม)
-            1.0, 0.0, 0.0,   # Drive_R
+            26.0, 0.0, 1.0,   # Drive_L (ลองเริ่มที่ 10 ตามที่คุณถาม)
+            25.0, 0.0, 1.0,   # Drive_R
             20.0, 0.0, 0.8,   # Platform
             10.0, 0.5, 1.0    # Arm
         ]
