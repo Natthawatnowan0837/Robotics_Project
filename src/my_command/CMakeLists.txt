@@ -15,6 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Command.srv"
   "srv/Conversation.srv"
   "srv/Sendposition.srv" 
+  "srv/CheckFloor.srv"
   DEPENDENCIES std_msgs
 )
 

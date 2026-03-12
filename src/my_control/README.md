@@ -21,3 +21,15 @@ git clone <URL_โปรเจกต์ของคุณ> .
 
 # Clone rtabmap_ros (หากยังไม่มีในเครื่อง)
 git clone [https://github.com/introlab/rtabmap_ros.git](https://github.com/introlab/rtabmap_ros.git)
+
+คำสะั่งดูพิกัด
+
+ros2 topic echo /rtabmap/localization_pose --once
+
+คำสั่ง navigation 
+
+ros2 launch nav2_bringup navigation_launch.py \
+use_sim_time:=false \
+params_file:=/home/noone/Robotics_Project/src/my_control/config/nav2_params.yaml \
+use_amcl:=false \
+map:=/rtabmap/map

@@ -11,7 +11,7 @@ def generate_launch_description():
     rviz_config_path = os.path.join(
         get_package_share_directory(package_name),
         'rviz',
-        'localize.rviz'
+        'localized.rviz'
     )
     
     realsense = IncludeLaunchDescription(
@@ -57,16 +57,9 @@ def generate_launch_description():
             ('/imu/data', '/rtabmap/imu')
         ]
     )
-
-    controller =  Node(
-            package='my_control', # ชื่อ package
-            executable='xbox_controller_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
-            name='xbox_controller_node', # ชื่อ node ตอนรัน (optional)
-            parameters=[{'mode': 'map'}], # ส่ง parameter (optional)
-            output='screen' # ให้แสดง log บนหน้าจอ terminal
-    )
+     
     # เพิ่ม .db ต่อท้ายชื่อไฟล์ที่ต้องการบันทึก
-    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/back.db')
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/go/go.db')
 
     # 4. RTAB-Map (ปรับปรุงให้เหมือน Terminal)
     rtabmap = IncludeLaunchDescription(
@@ -94,7 +87,6 @@ def generate_launch_description():
         rsp,
         node_joint_state_publisher,
         imu_filter,
-        controller,
         # ใช้ TimerAction เพื่อรอให้ Realsense และ IMU Filter ปล่อยข้อมูลออกมาก่อน 3 วินาที
         TimerAction(period=3.0, actions=[rtabmap]),
     ])

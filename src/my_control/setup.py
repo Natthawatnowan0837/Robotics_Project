@@ -45,11 +45,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'xbox_controller_node = my_control.xbox_controller_node:main',
-            'params = my_control.params:main',
-            'imu_bridge = my_control.imu_bridge:main',
+            'controller_node = my_control.controller_node:main',
+            'pid_parameters_node = my_control.pid_parameters:main',
+            'client = my_control.client:main',
+            'analysis_floor=my_control.analysis_floor:main',
             'obtacle_stop=my_control.obtacle_stop:main',
-            'cmd=my_control.cmd:main'
+            'nav_goal=my_control.nav_goal:main'
         ],
     },
 )

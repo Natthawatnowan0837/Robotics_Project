@@ -1,0 +1,4 @@
+# Request (สิ่งที่ voice_processor ส่งไป)
+float32 z
+---
+float32 z

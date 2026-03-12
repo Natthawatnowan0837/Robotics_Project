@@ -146,9 +146,9 @@ void controller_callback(const void * msgin) {
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
   if (timer != NULL) {
     // pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
-    pid_drive(current_linear_x,current_angular_z,motorDrive_L,motorDrive_R);
+    // pid_drive(current_linear_x,current_angular_z,motorDrive_L,motorDrive_R);
     pid_plateform(anglePlatformY,hall_effect);
-    // pwm_motor(linear_control,angular_control),pid_drive[3];
+    pwm_motor(current_linear_x,current_angular_z);
     // pwm_platform(platform_control,hall_effect);
     // pwm_arm(arm_control);
     // หยอดข้อมูลลง pub_data[i] ก่อนส่ง
@@ -164,7 +164,7 @@ void error_loop() {
 }
 
 void setup() {
-  init_PID();
+  // init_PID();
   init_plateformPID();
   set_microros_transports(); // เริ่มต้น Serial Transport
   

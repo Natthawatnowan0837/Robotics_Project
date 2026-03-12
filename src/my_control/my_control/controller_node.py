@@ -12,8 +12,8 @@ class KeyboardControllerNode(Node):
         
         # --- [ Configuration ] ---
         # ปรับค่าความเร็วตรงนี้ให้เหมาะกับหุ่นยนต์ของคุณ
-        self.declare_parameter('linear_speed', 0.3) 
-        self.declare_parameter('angular_speed', 0.3)
+        self.declare_parameter('linear_speed', 0.1) #0.3 deffult
+        self.declare_parameter('angular_speed', 0.1) #0.3 defult
         
         self.linear_max = self.get_parameter('linear_speed').value
         self.angular_max = self.get_parameter('angular_speed').value

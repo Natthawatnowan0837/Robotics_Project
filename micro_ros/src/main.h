@@ -46,13 +46,13 @@ extern std_msgs__msg__Float32 msg_pub_stateArm;
 extern std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; 
 
 // // --- แชร์ฟังก์ชันและตัวแปร (Extern) ---
-void init_PID();
-void pid_drive(float linear, float angular, float motorDrive_L, float motorDrive_R);
+// void init_PID();
+// void pid_drive(float linear, float angular, float motorDrive_L, float motorDrive_R);
 
 void init_plateformPID();
 void pid_plateform(float anglePlatformY,float hall_effect);
 
-// void pwm_motor(float linear_control,float angular_control);
+void pwm_motor(float linear_control,float angular_control);
 // void pwm_platform(float platform_control,float hall_effect);
 // void pwm_arm(float arm_control);
 
