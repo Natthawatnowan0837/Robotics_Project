@@ -1,0 +1,324 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="my_stair_robot">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="-0.00354503259395966 1.64922598910877E-08 -0.0275714174379754" rpy="0 0 0" />
+      <mass value="6.78274057781771" />
+      <inertia ixx="0.38334336762778" ixy="3.10138367273582E-09" ixz="-4.5823272153147E-05" iyy="0.525140168552664" iyz="6.6583744687218E-10" izz="0.906714509360643" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/base_link.STL" />
+      </geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="left_wheel">
+    <inertial>
+      <origin xyz="0 1.33226762955019E-15 0.00799999999999956" rpy="0 0 0" />
+      <mass value="0.49878272388527" />
+      <inertia ixx="0.000734460787133096" ixy="-6.1544862650644E-20" ixz="7.73295837821226E-20" iyy="0.000734460787133096" iyz="-2.06884830507117E-21" izz="0.00138410570285403" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" />
+      </geometry>
+      <material name=""><color rgba="0.796078431372549 0.823529411764706 0.937254901960784 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="leftwheel" type="continuous">
+    <origin xyz="-0.0177919708029353 0.322461651584687 -0.0274999999999999" rpy="-1.5707963267949 0 0" />
+    <parent link="base_link" />
+    <child link="left_wheel" />
+    <axis xyz="0 0 -1" />
+    <limit effort="10" velocity="50" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="right_wheel">
+    <inertial>
+      <origin xyz="2.22044604925031E-16 1.33226762955019E-15 -0.00800000000000001" rpy="0 0 0" />
+      <mass value="0.49878272388527" />
+      <inertia ixx="0.000734460787133096" ixy="-2.09326824053297E-20" ixz="8.70760391290352E-20" iyy="0.000734460787133096" iyz="7.18487423434696E-21" izz="0.00138410570285403" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" />
+      </geometry>
+      <material name=""><color rgba="0.796078431372549 0.823529411764706 0.937254901960784 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="rightwheel" type="continuous">
+    <origin xyz="-0.0177919708029353 -0.322461651584691 -0.0274999999999997" rpy="-1.5707963267949 0 0" />
+    <parent link="base_link" />
+    <child link="right_wheel" />
+    <axis xyz="0 0 1" />
+    <limit effort="10" velocity="50" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="rear_caster">
+    <inertial>
+      <origin xyz="-0.0037104950061766 5.01555225606021E-05 -0.0365904486150335" rpy="0 0 0" />
+      <mass value="0.0174787247499813" />
+      <inertia ixx="6.16393096918926E-06" ixy="-5.65503084569632E-09" ixz="-1.25291199910808E-06" iyy="5.86637436716775E-06" iyz="1.27361343250995E-08" izz="4.41363584641845E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="rearcaster" type="continuous">
+    <origin xyz="-0.530291970803071 0 -0.0122000000000001" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="rear_caster" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="rear_caster_wheel">
+    <inertial>
+      <origin xyz="-4.84273659573375E-06 1.93265481762683E-06 -6.73028388020747E-07" rpy="0 0 0" />
+      <mass value="0.0291885410390134" />
+      <inertia ixx="4.18965531573838E-06" ixy="6.26500529157608E-11" ixz="1.02364354017055E-08" iyy="4.18971902010473E-06" iyz="8.70690843632022E-12" izz="5.73096598916081E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster_wheel.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster_wheel.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="rearcasterwheel" type="continuous">
+    <origin xyz="-0.0188852028678461 0.000125698183635503 -0.0711548485113878" rpy="-1.5707963267949 0 0" />
+    <parent link="rear_caster" />
+    <child link="rear_caster_wheel" />
+    <axis xyz="-0.00665576114394258 0 -0.99997785017649" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="front_left_arm">
+    <inertial>
+      <origin xyz="-0.11758422137548 0.0184293862668812 0.0192764183551273" rpy="0 0 0" />
+      <mass value="0.192234433652185" />
+      <inertia ixx="3.39716333713551E-05" ixy="4.4267910742898E-05" ixz="-7.87894797741563E-08" iyy="0.000313496915576437" iyz="1.21798400059112E-08" izz="0.000325658505151572" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_left_arm.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_left_arm.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="frontleftarm" type="continuous">
+    <origin xyz="0.28721 0.41 0.017" rpy="-1.5708 0 0" />
+    <parent link="base_link" />
+    <child link="front_left_arm" />
+    <axis xyz="0 0 1" />
+    <limit effort="236" velocity="2.6" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="left_arm_f">
+    <inertial>
+      <origin xyz="-0.173234082653462 0.0142015861340897 0.0225869803181442" rpy="0 0 0" />
+      <mass value="0.830251572303495" />
+      <inertia ixx="0.00012994852387453" ixy="-8.73969121726799E-05" ixz="-7.07031641027359E-11" iyy="0.0132824489337879" iyz="1.80098020085666E-11" izz="0.0133591295785327" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/left_arm_f.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/left_arm_f.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="leftarmfrontjoint" type="continuous">
+    <origin xyz="-0.23718 0.036665 0.0352" rpy="0 0 0" />
+    <parent link="front_left_arm" />
+    <child link="left_arm_f" />
+    <axis xyz="0 0 -1" />
+    <mimic joint="frontleftarm" multiplier="-1" offset="0" />
+  </joint>
+
+  <link name="front_right_arm">
+    <inertial>
+      <origin xyz="-0.117660549552164 0.0179356414647501 -0.0192764183520208" rpy="0 0 0" />
+      <mass value="0.192234433652185" />
+      <inertia ixx="3.39716333713552E-05" ixy="4.42679107428981E-05" ixz="7.87894797741119E-08" iyy="0.000313496915576435" iyz="-1.21798400059071E-08" izz="0.000325658505151571" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_right_arm.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_right_arm.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="frontrightarm" type="continuous">
+    <origin xyz="0.2872 -0.41 0.017" rpy="-1.5708 0 0" />
+    <parent link="base_link" />
+    <child link="front_right_arm" />
+    <axis xyz="0 0 1" />
+    <limit effort="236" velocity="2.6" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+  <link name="right_arm_f">
+    <inertial>
+      <origin xyz="-0.173234121501403 0.014201556598754 -0.022586970843187" rpy="0 0 0" />
+      <mass value="0.830251250007781" />
+      <inertia ixx="0.000129948455524354" ixy="-8.73973895293667E-05" ixz="8.42981758974309E-11" iyy="0.0132824482456701" iyz="-7.01818089981112E-11" izz="0.0133591288850021" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/right_arm_f.STL" /></geometry>
+      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/right_arm_f.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="frontrightarmjoint" type="continuous">
+    <origin xyz="-0.23718 0.036665 -0.0352" rpy="0 0 0" />
+    <parent link="front_right_arm" />
+    <child link="right_arm_f" />
+    <axis xyz="0 0 1" />
+    <mimic joint="frontrightarm" multiplier="-1" offset="0" />
+  </joint>
+
+  <link name="rear_left_arm">
+    <inertial>
+      <origin xyz="-0.11758422137548 0.0184293862668817 0.0192764183551275" rpy="0 0 0" />
+      <mass value="0.192234433652185" />
+      <inertia ixx="3.39716333713552E-05" ixy="4.42679107428981E-05" ixz="-7.87894797741582E-08" iyy="0.000313496915576437" iyz="1.21798400059134E-08" izz="0.000325658505151572" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_left_arm.STL" /></geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_left_arm.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="rearleftarm" type="continuous">
+    <origin xyz="-0.15279 0.41 0.018" rpy="-1.5708 0 0" />
+    <parent link="base_link" />
+    <child link="rear_left_arm" />
+    <axis xyz="0 0 1" />
+    <mimic joint="frontleftarm" multiplier="1" offset="0" />
+  </joint>
+
+  <link name="rear_right_arm">
+    <inertial>
+      <origin xyz="-0.117660549552164 0.0179356414647504 -0.0192764183520206" rpy="0 0 0" />
+      <mass value="0.192234433652184" />
+      <inertia ixx="3.39716333713549E-05" ixy="4.42679107428979E-05" ixz="7.87894797744037E-08" iyy="0.000313496915576435" iyz="-1.21798400059525E-08" izz="0.00032565850515157" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_right_arm.STL" /></geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_right_arm.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="rearrightarm" type="continuous">
+    <origin xyz="-0.15279 -0.41 0.018" rpy="-1.5708 0 0" />
+    <parent link="base_link" />
+    <child link="rear_right_arm" />
+    <axis xyz="0 0 1" />
+    <mimic joint="frontrightarm" multiplier="1" offset="0" />
+  </joint>
+
+  <link name="platform">
+    <inertial>
+      <origin xyz="-0.210980033273781 -0.230327174996455 0.114" rpy="0 0 0" />
+      <mass value="4.19622278759594" />
+      <inertia ixx="0.313036750912418" ixy="-2.45442859314821E-09" ixz="3.21425440247246E-16" iyy="0.350307662080967" iyz="1.39126816336622E-16" izz="0.121664874796483" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/platform.STL" /></geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/platform.STL" /></geometry>
+    </collision>
+  </link>
+
+  <joint name="platformjoint" type="revolute">
+    <origin xyz="0.484389872406691 -0.113000000000171 0.000924541981120797" rpy="-1.5707963267949 0.000638648234763699 0" />
+    <parent link="base_link" />
+    <child link="platform" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="0.5236" effort="142" velocity="8" />
+    <dynamics damping="0.1" friction="0.02" />
+  </joint>
+
+    <joint name="camera_joint" type="fixed">
+        <parent link="platform"/>
+        <child link="camera_link"/>
+        <origin xyz="0.05 -0.43 0" rpy="1.5708 0 0"/>
+    </joint>
+
+    <link name="camera_link">
+        <visual>
+            <geometry>
+                <box size="0.020 0.06 0.03"/>
+            </geometry>
+            <material name="red"/>
+        </visual>
+    </link>
+
+</robot>

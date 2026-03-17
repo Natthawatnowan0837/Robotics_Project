@@ -16,22 +16,22 @@ def generate_launch_description():
     )
 
     # 2. Gazebo
-    gazebo = IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([os.path.join(
-                    get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')])
-             )
+    # gazebo = IncludeLaunchDescription(
+    #             PythonLaunchDescriptionSource([os.path.join(
+    #                 get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')])
+    #          )
 
-    # 3. Spawn Entity
-    spawn_entity = Node(package='gazebo_ros', executable='spawn_entity.py',
-                        arguments=['-topic', 'robot_description', '-entity', 'my_robot'],
-                        output='screen')
+    # # 3. Spawn Entity
+    # spawn_entity = Node(package='gazebo_ros', executable='spawn_entity.py',
+    #                     arguments=['-topic', 'robot_description', '-entity', 'my_robot'],
+    #                     output='screen')
 
     # 4. RViz2
     rviz = Node(package='rviz2', executable='rviz2', name='rviz2', output='screen')
 
     return LaunchDescription([
         rsp,
-        gazebo,
-        spawn_entity,
+        # gazebo,
+        # spawn_entity,
         rviz,
     ])

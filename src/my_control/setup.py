@@ -29,13 +29,12 @@ setup(
             (os.path.join('share', package_name, 'config'), glob('config/*')),
             (os.path.join('share', package_name, 'rviz'), glob('rviz/*')),
             
-            # models และ meshes (ตรวจให้ดีว่าไม่มีโฟลเดอร์ซ้อนใน meshes ถ้ามีต้องทำแบบเดียวกับ maps)
-            (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.sdf')),
-            (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.config')),
-            (os.path.join('share', package_name, 'models/my_stair_robot'), glob('models/my_stair_robot/*.xacro')),        
-            (os.path.join('share', package_name, 'models/my_stair_robot/meshes'), glob('models/my_stair_robot/meshes/*')),
-            
-        ],
+            (os.path.join('share', package_name, 'my_stair_robot'), glob('my_stair_robot/*.xacro')),
+            (os.path.join('share', package_name, 'my_stair_robot/meshes'), glob('my_stair_robot/meshes/*')),
+            (os.path.join('share', package_name, 'my_stair_robot'), glob('my_stair_robot/*.config')),
+    
+    
+    ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='noone',

@@ -14,8 +14,8 @@ def generate_launch_description():
 
     # 1. ระบุพาธไปยังไฟล์ model.urdf.xacro
     pkg_path = os.path.join(get_package_share_directory('my_control'))
-    xacro_file = os.path.join(pkg_path, 'models', 'my_stair_robot', 'robot.urdf.xacro')
-
+    xacro_file = os.path.join(pkg_path, 'my_stair_robot', 'robot.urdf.xacro')
+    
     # 2. ใช้ xacro process ไฟล์ แทนการใช้ open().read() แบบเดิม
     # วิธีนี้จะทำการรวมไฟล์ที่ include และคำนวณค่าตัวแปรต่างๆ ให้เสร็จสรรพ
     robot_description_config = xacro.process_file(xacro_file).toxml()
