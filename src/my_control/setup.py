@@ -46,6 +46,9 @@ setup(
         'console_scripts': [
             'controller_node = my_control.controller_node:main',
             'pid_parameters_node = my_control.pid_parameters:main',
+            'encoder_to_odom = my_control.encoder_to_odom:main',
+            'imu_data = my_control.imu_data:main',
+            'test_odom = my_control.test_odom:main',
             'client = my_control.client:main',
             'analysis_floor=my_control.analysis_floor:main',
             'obtacle_stop=my_control.obtacle_stop:main',

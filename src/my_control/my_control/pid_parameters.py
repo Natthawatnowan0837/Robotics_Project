@@ -4,8 +4,9 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
-import matplotlib.pyplot as plt
-from collections import deque
+# import matplotlib.pyplot as plt  # เอากราฟออก
+# from collections import deque    # ไม่ได้ใช้เก็บข้อมูลกราฟแล้ว
+import time
 
 class PIDManagerNode(Node):
     def __init__(self):
@@ -15,9 +16,10 @@ class PIDManagerNode(Node):
         self.publisher_ = self.create_publisher(Float32MultiArray, 'pid_parameters', 10)
         self.timer = self.create_timer(0.1, self.timer_callback)
         
-        # 2. Subscriber (ปิดการดึงข้อมูล balance ตามคำขอ)
-        # self.subscription_bal = self.create_subscription(Float32MultiArray, 'balance', self.balance_callback, 10)
+        # ตัวแปรสำหรับคุมความเร็วการโชว์ Log (โชว์ทุก 5 วินาที)
+        self.last_log_time = time.time()
         
+        # 2. Subscriber รับค่าสถานะจาก ESP32 มาโชว์ใน Log
         self.subscription_drive = self.create_subscription(
             Float32MultiArray,
             'stageDrive', 
@@ -25,70 +27,56 @@ class PIDManagerNode(Node):
             10)
         
         # ตั้งค่า PID [P, I, D]
+        # [Drive_L_P, I, D, Drive_R_P, I, D, Platform_P, I, D, Arm_P, I, D]
         self.pid_values = [
-            26.0, 0.0, 1.0,   # Drive_L (ลองเริ่มที่ 10 ตามที่คุณถาม)
-            25.0, 0.0, 1.0,   # Drive_R
-            20.0, 0.0, 0.8,   # Platform
-            10.0, 0.5, 1.0    # Arm
+            30.0, 0.0, 1.0,   # Drive_L (ปรับ Ki ตามที่คุยกันเพื่อให้ถึง 0.3 จริง)
+            31.25, 0.0, 1.0,   # Drive_R
+            20.0, 0.0, 0.8,    # Platform
+            10.0, 0.5, 1.0     # Arm
         ]
 
-        # --- ส่วนการเตรียม Plot กราฟ ---
-        self.max_points = 100  # จำนวนจุดที่จะแสดงบนกราฟ
-        self.time_data = deque(maxlen=self.max_points)
-        self.out_l = deque(maxlen=self.max_points)
-        self.out_r = deque(maxlen=self.max_points)
-        self.set_l = deque(maxlen=self.max_points)
-        self.set_r = deque(maxlen=self.max_points)
-        self.count = 0
-
-        # สร้าง Figure สำหรับ Matplotlib
-        plt.ion() # เปิดโหมด Interactive
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(8, 8))
-        self.get_logger().info("=== PID Manager Started (Plotting stageDrive) ===")
+        # --- ส่วนกราฟเดิม (Comment Out) ---
+        # self.max_points = 100
+        # self.time_data = deque(maxlen=self.max_points)
+        # self.out_l wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwddsssssssssssssssssssssssssssssssssssssssssd= deque(maxlen=self.max_points)
+        # ... (ส่วนอื่นๆ ของกราฟถูกปิดใช้งาน)
+        
+        self.get_logger().info("=== PID Manager Started (Log Mode Only) ===")
 
     def timer_callback(self):
+        # ส่งค่าไปยัง ESP32
         msg = Float32MultiArray()
         msg.data = self.pid_values
         self.publisher_.publish(msg)
 
+        # แสดง Log ค่า PID ทุกๆ 5 วินาที
+        current_time = time.time()
+        if current_time - self.last_log_time > 5.0:
+            self.show_pid_logs()
+            self.last_log_time = current_time
+
+    def show_pid_logs(self):
+        """ แสดงค่า PID ที่ตั้งไว้ในปัจจุบัน """
+        self.get_logger().info("-" * 45)
+        self.get_logger().info("--- CURRENT PID SETTINGS ---")
+        self.get_logger().info(f"Drive L  | P: {self.pid_values[0]:.2f} I: {self.pid_values[1]:.2f} D: {self.pid_values[2]:.2f}")
+        self.get_logger().info(f"Drive R  | P: {self.pid_values[3]:.2f} I: {self.pid_values[4]:.2f} D: {self.pid_values[5]:.2f}")
+        self.get_logger().info(f"Platform | P: {self.pid_values[6]:.2f} I: {self.pid_values[7]:.2f} D: {self.pid_values[8]:.2f}")
+        self.get_logger().info(f"Arm      | P: {self.pid_values[9]:.2f} I: {self.pid_values[10]:.2f} D: {self.pid_values[11]:.2f}")
+        self.get_logger().info("-" * 45)
+
     def drive_callback(self, msg):
-        """
-        รับค่าจาก ESP32: [0]=OutL, [1]=OutR, [2]=SetL, [3]=SetR
-        ตามที่เขียนไว้ในโค้ดฝั่ง Arduino
-        """
+        """ รับค่า Real-time จากหุ่นยนต์มาโชว์ใน Log """
         if len(msg.data) >= 4:
-            self.count += 1
-            self.time_data.append(self.count)
-            self.out_l.append(msg.data[0])
-            self.out_r.append(msg.data[1])
-            self.set_l.append(msg.data[2])
-            self.set_r.append(msg.data[3])
+            # โชว์ค่าปัจจุบันเปรียบเทียบกับเป้าหมาย (โชว์ทุกครั้งที่ได้รับข้อมูล หรือจะตั้งเวลาหน่วงก็ได้)
+            out_l, out_r = msg.data[0], msg.data[1]
+            set_l, set_r = msg.data[2], msg.data[3]
             
-            self.update_plot()
+            # แสดง Log สถานะการวิ่งจริง (Optional: ถ้ามันรกเกินไปสามารถใส่ if time.time() แบบข้างบนได้ครับ)
+            self.get_logger().info(f"L: [Set {set_l:.2f} | Real {out_l:.2f}]  R: [Set {set_r:.2f} | Real {out_r:.2f}]")
 
-    def update_plot(self):
-        self.ax1.clear()
-        self.ax2.clear()
-
-        # กราฟล้อซ้าย
-        self.ax1.plot(self.time_data, self.out_l, label='Output L (PWM)', color='red')
-        self.ax1.plot(self.time_data, self.set_l, label='Setpoint L', color='blue', linestyle='--')
-        self.ax1.set_title("Left Wheel Performance")
-        self.ax1.legend(loc='upper right')
-        self.ax1.grid(True)
-
-        # กราฟล้อขวา
-        self.ax2.plot(self.time_data, self.out_r, label='Output R (PWM)', color='green')
-        self.ax2.plot(self.time_data, self.set_r, label='Setpoint R', color='darkorange', linestyle='--')
-        self.ax2.set_title("Right Wheel Performance")
-        self.ax2.legend(loc='upper right')
-        self.ax2.grid(True)
-
-        plt.tight_layout()
-        plt.pause(0.001) # ขยับกราฟ
-
-    # def balance_callback(self, msg):
-    #     pass # ปิดการทำงานส่วนนี้ไว้
+    # def update_plot(self):
+    #     pass # ปิดฟังก์ชันกราฟ
 
 def main(args=None):
     rclpy.init(args=args)
@@ -98,7 +86,7 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Node stopped by user")
     finally:
-        plt.close('all')
+        # plt.close('all') # ปิดส่วนกราฟ
         node.destroy_node()
         rclpy.shutdown()
 

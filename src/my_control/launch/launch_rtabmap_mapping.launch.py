@@ -72,10 +72,15 @@ def generate_launch_description():
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
+            'visual_odometry': 'false',
+            'odom_topic': '/odometry/filtered',
+            'publish_tf_odom': 'false', 
+            'vo_frame_id': 'odom',
+            'imu_topic': '/imu/data_standard', # เปลี่ยนให้ตรงกับ Bridge Node ของคุณ
             'frame_id': 'base_link',
             'approx_sync': 'true',         # ตั้งเป็น true เพื่อความยืดหยุ่นในการรับข้อมูล
             'wait_imu_to_init': 'true',    # รอ IMU ให้พร้อมก่อนเริ่ม SLAM
-            'imu_topic': '/rtabmap/imu',
+            # 'imu_topic': '/rtabmap/imu',
             'qos': '1',
             'rviz': 'true',                # เปิด RViz อัตโนมัติ
             'rviz_cfg': rviz_config_path   # ใช้ไฟล์ config ที่คุณตั้งไว้

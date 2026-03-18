@@ -7,7 +7,7 @@ void Encoder_arm() {
     tcaSelect(5);
     float deg_r = as5600_arm.readAngle() * RAW_TO_DEG;
     
-    msg_motor.data.data[2] = deg_l;
-    msg_motor.data.data[3] = deg_r;
+    msg_motor.data.data[6] = deg_l;
+    msg_motor.data.data[7] = deg_r;
 }
 

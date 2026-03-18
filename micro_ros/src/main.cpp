@@ -13,17 +13,15 @@ rclc_executor_t executor;
 rcl_timer_t timer;
 
 rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
-rcl_subscription_t sub_motor,sub_controller,sub_sensors,sub_pid,
+rcl_subscription_t sub_motor,sub_arm_vel,sub_sensors,sub_pid,
                     sub_cmd_vel;
 
 std_msgs__msg__Float32 msg_pub_stateArm;
 std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; // สำหรับส่งออก
 std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_sensors,msg_sub_pid; // สำหรับรับเข้า
-geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_controller;
+geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_arm_vel;
 
-// float pub_buffer[5]; // จองพื้นที่ส่ง (ปรับจำนวนได้)
-float motor_data[4]; // จองพื้นที่รับ (ปรับจำนวนได้)
-float controller_data[4];
+float motor_data[8]; // จองพื้นที่รับ (ปรับจำนวนได้)
 float sensors_data[10];
 float pid_data[12];
 //-------------------
@@ -32,16 +30,13 @@ float statePlatform_report[2];
 float balance_report[3];
 
 //------------------------
-float motorDrive_L = 0.0; 
-float motorDrive_R = 0.0;
-float motorArm_L = 0.0;
-float motorArm_R = 0.0;
+float motorDrive_L = 0.0f; 
+float motorDrive_R = 0.0f;
+float motorArm_L = 0.0f;
+float motorArm_R = 0.0f;
 //------------------------
-float linear_control = 0.0; 
-float angular_control = 0.0;
+float linear_arm = 0.0; 
 float platform_control = 0.0;
-float arm_control = 0.0;
-
 //-------------------------
 float current_linear_x = 0.0f;
 float current_angular_z = 0.0f;
@@ -71,11 +66,11 @@ float pid_arm_parameters[3];
 // --- Callback: เมื่อได้รับข้อมูลจาก ROS 2 ---
 void motor_callback(const void * msgin) {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  if (msg->data.size >= 4) {
+  if (msg->data.size >= 8) {
     motorDrive_L = msg->data.data[0];
     motorDrive_R = msg->data.data[1];
-    motorArm_L   = msg->data.data[2];
-    motorArm_R   = msg->data.data[3];
+    motorArm_L   = msg->data.data[6];
+    motorArm_R   = msg->data.data[7];
   }
 }
 
@@ -136,21 +131,20 @@ void cmd_vel_callback(const void * msgin) {
   current_angular_z = (float)msg->angular.z; 
 }
 
-void controller_callback(const void * msgin) {
+void arm_vel_callback(const void * msgin) {
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
-  linear_control  = (float)msg->linear.x;  
-  angular_control = (float)msg->angular.z; 
+  linear_arm  = (float)msg->linear.x;  
 }
 
 // --- Timer: สำหรับส่งข้อมูลออก (ทำงานทุก 20ms หรือ 50Hz) ---
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
   if (timer != NULL) {
     // pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
-    // pid_drive(current_linear_x,current_angular_z,motorDrive_L,motorDrive_R);
+    pid_drive(current_linear_x*2.0,current_angular_z*2.0,motorDrive_L,motorDrive_R);
     pid_plateform(anglePlatformY,hall_effect);
-    pwm_motor(current_linear_x,current_angular_z);
+    // pwm_motor(current_linear_x,current_angular_z);
     // pwm_platform(platform_control,hall_effect);
-    // pwm_arm(arm_control);
+    pwm_arm(linear_arm);
     // หยอดข้อมูลลง pub_data[i] ก่อนส่ง
     // RCSOFTCHECK(rcl_publish(&pub_data, &msg_pub, NULL));
   }
@@ -164,7 +158,7 @@ void error_loop() {
 }
 
 void setup() {
-  // init_PID();
+  init_PID();
   init_plateformPID();
   set_microros_transports(); // เริ่มต้น Serial Transport
   
@@ -175,7 +169,7 @@ void setup() {
   // --- 1. เคลียร์และจอง Memory สำหรับ MultiArray (สำคัญที่สุด) ---งจริง
 
   msg_sub_motor.data.data = motor_data;
-  msg_sub_motor.data.capacity = 4;
+  msg_sub_motor.data.capacity = 8;
 
   msg_sub_sensors.data.data = sensors_data;
   msg_sub_sensors.data.capacity = 10;
@@ -222,8 +216,8 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "sensors"));
   RCCHECK(rclc_subscription_init_default(&sub_pid, &node, 
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "pid_parameters"));
-  RCCHECK(rclc_subscription_init_default(&sub_controller, &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "controller"));
+  RCCHECK(rclc_subscription_init_default(&sub_arm_vel, &node, 
+    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "arm_vel"));
   RCCHECK(rclc_subscription_init_default(&sub_cmd_vel, &node, 
     ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
 
@@ -233,7 +227,7 @@ void setup() {
   // Executor รองรับ 2 งาน: 1 Subscription + 1 Timer
   RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_motor, &msg_sub_motor, &motor_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &sub_controller, &msg_sub_controller, &controller_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &sub_arm_vel, &msg_sub_arm_vel, &arm_vel_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_sensors, &msg_sub_sensors, &sensors_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_pid, &msg_sub_pid, &pid_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_subscription(&executor, &sub_cmd_vel, &msg_cmd_vel, &cmd_vel_callback, ON_NEW_DATA));

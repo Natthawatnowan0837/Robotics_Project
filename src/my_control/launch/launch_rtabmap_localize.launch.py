@@ -34,7 +34,7 @@ def generate_launch_description():
     # 2. Robot State Publisher
     rsp = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('my_sim'), 'launch', 'rsp.launch.py'
+            get_package_share_directory(package_name), 'launch', 'rsp.launch.py'
         )]), launch_arguments={'use_sim_time': 'false'}.items()
     )
     
@@ -62,30 +62,42 @@ def generate_launch_description():
     )
 
 
-    pid_parameters_node =  Node(
-            package='my_control', # ชื่อ package
-            executable='pid_parameters_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
-            name='pid_parameters_node', # ชื่อ node ตอนรัน (optional)
-            output='screen' # ให้แสดง log บนหน้าจอ terminal
-    )
+    # pid_parameters_node =  Node(
+    #         package='my_control', # ชื่อ package
+    #         executable='pid_parameters_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
+    #         name='pid_parameters_node', # ชื่อ node ตอนรัน (optional)
+    #         output='screen' # ให้แสดง log บนหน้าจอ terminal
+    # )
 
     # 4. RTAB-Map Configuration
-    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/map/floor1/back/back.db')
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/maps/go.db')
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
             'database_path': database_full_path,
-            'localization': 'true', 
-            'rtabmap_args': '--Mem/IncrementalMemory false',
+            'localization': 'true',                # เปิดโหมด Localization (ไม่อัปเดตแผนที่ใหม่)
+            
+            # rtabmap_args สำหรับโหมด Localization
+            'rtabmap_args': '--Mem/IncrementalMemory false '
+                            '--Mem/InitMemoryWMS true', # โหลดแผนที่จาก Database ทันที
+            
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
             'frame_id': 'base_link',
+            
+            # --- ตั้งค่าให้ใช้ข้อมูลจาก EKF (เหมือนโหมด Mapping) ---
+            'visual_odometry': 'false',           # ปิด Visual Odom ของ rtabmap
+            'odom_topic': '/odometry/filtered',   # ใช้ค่า Fusion (Wheel + IMU)
+            'publish_tf_odom': 'false',           # ให้ EKF เป็นคนส่ง TF odom -> base_link
+            'vo_frame_id': 'odom',
+            
+            # --- การตั้งค่าอื่นๆ ---
             'approx_sync': 'true', 
-            'imu_topic': '/rtabmap/imu',
-            'wait_imu_to_init': 'true',
+            'imu_topic': '/imu/data_standard',    # แก้ให้ตรงกับ Node ของคุณ
+            'wait_imu_to_init': 'false',          # แนะนำเป็น false ถ้าใช้ EKF นำทางอยู่แล้ว
             'qos': '1',
             'rviz': 'true',
             'rviz_cfg': rviz_config_path 
@@ -97,7 +109,7 @@ def generate_launch_description():
         rsp,
         node_joint_state_publisher,
         imu_filter,
-        pid_parameters_node,
+        # pid_parameters_node,
         
         # รัน RTAB-Map หลังผ่านไป 3 วินาที
         TimerAction(period=3.0, actions=[rtabmap]),

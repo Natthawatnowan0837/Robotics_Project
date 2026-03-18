@@ -100,7 +100,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: False
-    controller_frequency: 20.0
+    controller_frequency: 10.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
@@ -127,11 +127,11 @@ controller_server:
       # ==========================================================
       # [กลุ่มที่ 1: ตั้งค่าความเร็วและความเร่ง] - แก้ตรงนี้เพื่อเพิ่มความเร็ว
       # ==========================================================
-      max_vel_x: 0.15        # ความเร็วเดินหน้าสูงสุด (m/s)
-      max_speed_xy: 0.15      # ต้องเท่ากับ max_vel_x
+      max_vel_x: 0.3        # ความเร็วเดินหน้าสูงสุด (m/s)
+      max_speed_xy: 0.3      # ต้องเท่ากับ max_vel_x
       max_vel_theta: 0.1 # ความเร็วการหมุนสูงสุด (rad/s)
-      min_vel_x: 0.0
-      min_vel_y: 0.0
+      min_vel_x: 0.2
+      min_vel_y: 0.2
       max_vel_y: 0.0
       min_speed_xy: 0.0
       min_speed_theta: 0.1
@@ -189,7 +189,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.3
+        inflation_radius: 0.2
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -244,11 +244,11 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.3
+        inflation_radius: 0.2
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    expected_planner_frequency: 5.0
     use_sim_time: False
     planner_plugins: ["GridBased"]
     GridBased:
@@ -263,8 +263,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.15, 0.0, 0.1]
-    min_velocity: [-0.15, 0.0, -0.1]
+    max_velocity: [0.3, 0.0, 0.3]
+    min_velocity: [-0.3, 0.0, -0.3]
     max_accel: [3.0, 0.0, 3.5]
     max_decel: [-3.0, 0.0, -3.5]
     odom_topic: "odom"

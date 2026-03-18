@@ -11,28 +11,30 @@ class KeyboardControllerNode(Node):
         super().__init__('keyboard_controller_node')
         
         # --- [ Configuration ] ---
-        # ปรับค่าความเร็วตรงนี้ให้เหมาะกับหุ่นยนต์ของคุณ
-        self.declare_parameter('linear_speed', 0.1) #0.3 deffult
-        self.declare_parameter('angular_speed', 0.1) #0.3 defult
+        self.declare_parameter('linear_speed', 0.3)
+        self.declare_parameter('angular_speed', 0.3)
+        self.declare_parameter('arm_speed', 0.5) # เพิ่มความเร็วสำหรับแขนกล
         
         self.linear_max = self.get_parameter('linear_speed').value
         self.angular_max = self.get_parameter('angular_speed').value
+        self.arm_max = self.get_parameter('arm_speed').value
 
         self.get_logger().info(f"--- Keyboard Controller Started ---")
-        self.get_logger().info(f"Use WASD to move. Press 'ESC' to stop node.")
-        self.get_logger().info(f"Current Config: Linear {self.linear_max}, Angular {self.angular_max}")
+        self.get_logger().info(f"WASD: Move Robot | QE: Move Arm | ESC: Stop")
+        self.get_logger().info(f"Config: Linear {self.linear_max}, Angular {self.angular_max}, Arm {self.arm_max}")
 
+        # Publishers
         self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.arm_vel_pub = self.create_publisher(Twist, 'arm_vel', 10) # เพิ่ม Topic สำหรับแขน
         
-        # เก็บสถานะการกดปุ่ม
         self.pressed_keys = set()
         
-        # เริ่มต้นฟังเสียงจากคีย์บอร์ด (Non-blocking)
+        # คีย์บอร์ด Listener
         self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         self.listener.start()
         
-        # Timer สำหรับส่งคำสั่ง cmd_vel อย่างต่อเนื่อง (20Hz)
-        self.timer = self.create_timer(0.05, self.publish_cmd_vel)
+        # Timer (20Hz)
+        self.timer = self.create_timer(0.05, self.publish_commands)
 
     def on_press(self, key):
         try:
@@ -48,33 +50,29 @@ class KeyboardControllerNode(Node):
                 if char in self.pressed_keys:
                     self.pressed_keys.remove(char)
             
-            # กด ESC เพื่อปิดโปรแกรม
             if key == keyboard.Key.esc:
                 self.get_logger().info("Exiting...")
                 rclpy.shutdown()
         except Exception:
             pass
 
-    def publish_cmd_vel(self):
+    def publish_commands(self):
+        # --- จัดการหุ่นยนต์ (Base) ---
         twist = Twist()
-        
-        # คำนวณความเร็วจากปุ่มที่กด
-        linear_val = 0.0
-        angular_val = 0.0
-
-        if 'w' in self.pressed_keys:
-            linear_val += self.linear_max
-        if 's' in self.pressed_keys:
-            linear_val -= self.linear_max
-        if 'a' in self.pressed_keys:
-            angular_val += self.angular_max
-        if 'd' in self.pressed_keys:
-            angular_val -= self.angular_max
-
-        twist.linear.x = float(linear_val)
-        twist.angular.z = float(angular_val)
-        
+        if 'w' in self.pressed_keys: twist.linear.x += self.linear_max
+        if 's' in self.pressed_keys: twist.linear.x -= self.linear_max
+        if 'a' in self.pressed_keys: twist.angular.z += self.angular_max
+        if 'd' in self.pressed_keys: twist.angular.z -= self.angular_max
         self.cmd_vel_pub.publish(twist)
+
+        # --- จัดการแขนกล (Arm) ---
+        arm_twist = Twist()
+        if 'q' in self.pressed_keys:
+            arm_twist.linear.x = float(self.arm_max)
+        if 'e' in self.pressed_keys:
+            arm_twist.linear.x = float(-self.arm_max)
+        
+        self.arm_vel_pub.publish(arm_twist)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -84,9 +82,10 @@ def main(args=None):
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        # ส่งค่า 0 เพื่อหยุดหุ่นยนต์ก่อนปิด Node
+        # หยุดทุกอย่างก่อนปิด
         stop_msg = Twist()
         node.cmd_vel_pub.publish(stop_msg)
+        node.arm_vel_pub.publish(stop_msg)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

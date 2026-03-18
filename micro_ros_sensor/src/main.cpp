@@ -12,7 +12,7 @@ std_msgs__msg__Float32MultiArray msg_motor , msg_sensors;
 MS5611 ms5611(0x77);
 
 float sensors[10];
-float motor_data[4] = {0.0f, 0.0f, 0.0f, 0.0f,};
+float motor_data[8];
 
 void tcaSelect(uint8_t i) {
     if (i > 7) return;
@@ -89,8 +89,8 @@ void setup() {
     allocator = rcl_get_default_allocator();
 
     // --- การจอง Memory สำหรับ MultiArray (สำคัญมาก) ---
-    msg_motor.data.capacity = 4;
-    msg_motor.data.size = 4;
+    msg_motor.data.capacity = 8;
+    msg_motor.data.size = 8;
     msg_motor.data.data = motor_data;
 
     msg_motor.layout.dim.capacity = 0;
