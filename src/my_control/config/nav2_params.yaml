@@ -118,29 +118,25 @@ controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.1
+      yaw_goal_tolerance: 3.14
       
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       
-      # ==========================================================
-      # [กลุ่มที่ 1: ตั้งค่าความเร็วและความเร่ง] - แก้ตรงนี้เพื่อเพิ่มความเร็ว
-      # ==========================================================
-      max_vel_x: 0.3        # ความเร็วเดินหน้าสูงสุด (m/s)
-      max_speed_xy: 0.3      # ต้องเท่ากับ max_vel_x
-      max_vel_theta: 0.1 # ความเร็วการหมุนสูงสุด (rad/s)
-      min_vel_x: 0.2
-      min_vel_y: 0.2
-      max_vel_y: 0.0
+      max_vel_x: 0.3          # ความเร็วสูงสุดที่เราต้องการ
+      max_speed_xy: 0.3
+      max_vel_theta: 0.45       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
+      min_vel_x: 0.0
       min_speed_xy: 0.0
-      min_speed_theta: 0.1
-
-      acc_lim_x: 3.0          # ความเร่งเดินหน้า (ยิ่งมากยิ่งออกตัวแรง)
-      acc_lim_theta: 3.5      # ความเร่งการหมุน
-      decel_lim_x: -3.0       # ความเร็วในการเบรก (ต้องสัมพันธ์กับความเร็ว)
-      decel_lim_theta: -3.5
-      # ==========================================================
+      min_speed_theta: 0.3     
+      
+      # ความเร่งใน DWB ควรจะ "น้อยกว่า" หรือ "เท่ากับ" Smoother
+      acc_lim_x: 0.5           # ออกตัวนิ่มๆ (ลดจาก 1.0)
+      acc_lim_theta: 1.5      
+      decel_lim_x: -1.0        # เบรกให้ไวกว่าตอนออกตัวนิดนึง
+      decel_lim_theta: -2.0
+          #=================================
 
       # ==========================================================
       # [กลุ่มที่ 2: การทำนายเส้นทางและการตัดสินใจ]
@@ -154,21 +150,21 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.2
       xy_goal_tolerance: 0.15
-      trans_stopped_velocity: 0.25
+      trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
       # ==========================================================
 
       # [ค่าน้ำหนักการคำนวณ (Critics)]
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.05
-      PathAlign.scale: 8.0
+      BaseObstacle.scale: 1.0 #ตรวจเช็กว่าเส้นทางนั้นจะชนสิ่งกีดขวางใน Costmap
+      PathAlign.scale: 5.0 #ยิ่งค่า scale สูง หุ่นจะยิ่งพยายามบิดตัวให้หน้าตรงกับทางที่จะไป
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 8.0
+      GoalAlign.scale: 0.0 # สั่งให้หุ่นหันหน้าเข้าหาจุดเป้าหมาย (Goal) ตลอดเวลา
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 24.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 24.0
+      PathDist.scale: 12.0 #สั่งให้หุ่นยนต์ "เกาะเส้นพาธ"
+      GoalDist.scale: 12.0 #สั่งให้หุ่นยนต์พยายามลดระยะห่างจากจุดหมายให้เร็วที่สุด
+      RotateToGoal.scale: 0.0 #บังคับให้หุ่นหมุนตัวอยู่กับที่เพื่อให้หน้าตรงกับ Goal เมื่อถึงระยะหนึ่ง
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
@@ -182,14 +178,14 @@ local_costmap:
       footprint: "[[-0.65, -0.55], [-0.65, 0.55], [0.65, 0.55], [0.65, -0.55]]"
       use_sim_time: False
       rolling_window: true
-      width: 5
-      height: 5
+      width: 2
+      height: 2
       resolution: 0.05
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.2
+        cost_scaling_factor: 0.7  # ลดค่าลง (ยิ่งน้อย ยิ่งกลัว)
+        inflation_radius: 0.3     # เพิ่มรัศมี (ยิ่งมาก ยิ่งเว้นระยะห่าง)
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -243,8 +239,8 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.2
+        cost_scaling_factor: 0.7
+        inflation_radius: 0.3
 
 planner_server:
   ros__parameters:
@@ -263,9 +259,12 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.3, 0.0, 0.3]
-    min_velocity: [-0.3, 0.0, -0.3]
-    max_accel: [3.0, 0.0, 3.5]
-    max_decel: [-3.0, 0.0, -3.5]
+    max_velocity: [0.3, 0.0, 0.45] 
+    min_velocity: [-0.3, 0.0, -0.45] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
+    
+    # ค่าความเร่งที่ยอมให้เกิดขึ้น (ควรมาก5ว่า DWB ประมาณ 20-50%)
+    # เพื่อให้ Smoother ไม่ไปหน่วงการตัดสิน5จของ Planner จนเกินไป
+    max_accel: [0.8, 0.0, 2.0]
+    max_decel: [-1.5, 0.0, -2.5]
     odom_topic: "odom"
     velocity_timeout: 1.0

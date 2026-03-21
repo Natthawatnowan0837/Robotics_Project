@@ -53,7 +53,7 @@ class ImuBridgeNode(Node):
         imu_msg = Imu()
         imu_msg.header.stamp = self.get_clock().now().to_msg()
         # ใช้ base_link เป็นจุดอ้างอิงหลักของหุ่นยนต์ [cite: 66]
-        imu_msg.header.frame_id = 'base_link' 
+        imu_msg.header.frame_id = 'imubody_link' 
 
         # Orientation
         q = self.euler_to_quaternion(roll, pitch, yaw)

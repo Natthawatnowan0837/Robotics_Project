@@ -3,7 +3,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry
 import math
 
-class EKFTestNode(Node):
+class odometry_filtered_Node(Node):
     def __init__(self):
         super().__init__('ekf_test_node')
         

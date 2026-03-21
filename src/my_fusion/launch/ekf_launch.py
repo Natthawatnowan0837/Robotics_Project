@@ -5,7 +5,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # หาที่อยู่ของไฟล์ config
-    pkg_share = get_package_share_directory('my_control')
+    pkg_share = get_package_share_directory('my_fusion')
     ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
 
     return LaunchDescription([

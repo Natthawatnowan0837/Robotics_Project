@@ -11,7 +11,7 @@ std_msgs__msg__Float32MultiArray msg_motor , msg_sensors;
 
 MS5611 ms5611(0x77);
 
-float sensors[10];
+float sensors[11];
 float motor_data[8];
 
 void tcaSelect(uint8_t i) {
@@ -63,6 +63,7 @@ float medianFilter(float* data, int size) {
     return sorted[size/2]; 
 }
 
+
 void setup() {
     Serial.begin(115200);
     set_microros_transports();
@@ -97,8 +98,8 @@ void setup() {
     msg_motor.layout.dim.size = 0;
     msg_motor.layout.data_offset = 0;
     // -----------------------------------------------
-    msg_sensors.data.capacity = 10;
-    msg_sensors.data.size = 10;
+    msg_sensors.data.capacity = 11;
+    msg_sensors.data.size = 11;
     msg_sensors.data.data = sensors;
     
     msg_sensors.layout.dim.capacity = 0;

@@ -1,3 +1,5 @@
-string command
+bool speaking
+bool listening
 ---
-string response
+bool process
+string file_name

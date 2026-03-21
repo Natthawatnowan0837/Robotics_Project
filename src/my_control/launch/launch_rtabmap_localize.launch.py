@@ -25,7 +25,7 @@ def generate_launch_description():
             'align_depth.enable': 'true',
             'enable_gyro': 'true',
             'enable_accel': 'true',
-            'unite_imu_method': '1',
+            'unite_imu_method': '2',
             'enable_sync': 'true',
             'depth_module.depth_visualization': 'true',
         }.items()
@@ -45,32 +45,8 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}]
     )
 
-    # 3. IMU Filter
-    imu_filter = Node(
-        package='imu_filter_madgwick',
-        executable='imu_filter_madgwick_node',
-        name='imu_filter',
-        parameters=[{
-            'use_mag': False,
-            'publish_tf': False,
-            'world_frame': 'enu'
-        }],
-        remappings=[
-            ('/imu/data_raw', '/camera/camera/imu'),
-            ('/imu/data', '/rtabmap/imu')
-        ]
-    )
-
-
-    # pid_parameters_node =  Node(
-    #         package='my_control', # ชื่อ package
-    #         executable='pid_parameters_node', # ชื่อที่ตั้งไว้ใน setup.py หรือชื่อไฟล์
-    #         name='pid_parameters_node', # ชื่อ node ตอนรัน (optional)
-    #         output='screen' # ให้แสดง log บนหน้าจอ terminal
-    # )
-
     # 4. RTAB-Map Configuration
-    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_control/maps/go.db')
+    database_full_path = os.path.expanduser('/home/noone/Robotics_Project/src/my_manager/maps/floor2/go.db')
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
@@ -79,10 +55,30 @@ def generate_launch_description():
             'database_path': database_full_path,
             'localization': 'true',                # เปิดโหมด Localization (ไม่อัปเดตแผนที่ใหม่)
             
-            # rtabmap_args สำหรับโหมด Localization
-            'rtabmap_args': '--Mem/IncrementalMemory false '
-                            '--Mem/InitMemoryWMS true', # โหลดแผนที่จาก Database ทันที
-            
+                        # rtabmap_args สำหรับโหมด Localization
+            'rtabmap_args': (
+                            '--Mem/IncrementalMemory false '
+                            '--Mem/InitMemoryWMS true '
+                            '--RGBD/OptimizeFromGraphEnd false '
+                            
+                            # 1. เพิ่มความเร็วในการประมวลผลช่วงหาตำแหน่ง (แนะนำ 0.5 - 1.0 Hz)
+                            '--Rtabmap/DetectionRate 0.8 '       
+                            
+                            # 2. เพิ่มจำนวนจุด Feature เพื่อให้จำ "ทางเดิน" ได้แม่นขึ้น (สำคัญมาก!)
+                            '--Kp/MaxFeatures 800 '              
+                            
+                            # 3. บังคับให้ค้นหาจากภาพทั่วทั้ง Database (Global Localization)
+                            '--RGBD/ProximityBySpace false '     
+                            '--RGBD/LoopClosureRecheck true '    
+                            
+                            # 4. ช่วยให้การเชื่อมต่อตำแหน่งนิ่งขึ้น
+                            '--RGBD/NeighborLinkRefining true '
+                            '--Vis/MinInliers 15 '               # ต้องเจอจุดเหมือนกันอย่างน้อย 15 จุดถึงจะยอมรับตำแหน่ง
+                            
+                            # 5. ลดภาระการคำนวณส่วนอื่นเพื่อชดเชย CPU
+                            '--RGBD/AngularUpdate 0.1 '          # หมุนนิดเดียวให้รีบเช็กตำแหน่ง
+                            '--RGBD/LinearUpdate 0.1'            # ขยับนิดเดียวให้รีบเช็กตำแหน่ง
+                        ),
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
@@ -108,9 +104,5 @@ def generate_launch_description():
         realsense,
         rsp,
         node_joint_state_publisher,
-        imu_filter,
-        # pid_parameters_node,
-        
-        # รัน RTAB-Map หลังผ่านไป 3 วินาที
         TimerAction(period=3.0, actions=[rtabmap]),
     ])

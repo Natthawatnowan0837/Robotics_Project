@@ -44,8 +44,28 @@ extern std_msgs__msg__Float32MultiArray msg_motor,msg_sensors;
 extern const int hallPin ;     // ขาที่ต่อกับ Out ของเซนเซอร์
 extern int hallState ;  
 // 
+// --- Kalman Filter Class (ไว้ที่นี่ที่เดียว) ---
+class SimpleKalmanFilter {
+  private:
+    float err_measure, err_estimate, q, current_estimate, last_estimate, kalman_gain;
+    bool is_initialized = false;
+  public:
+    SimpleKalmanFilter(float mea_e, float est_e, float q_val) {
+      err_measure = mea_e; err_estimate = est_e; q = q_val;
+    }
+    float updateEstimate(float mea) {
+      if (!is_initialized) { last_estimate = mea; current_estimate = mea; is_initialized = true; return current_estimate; }
+      kalman_gain = err_estimate / (err_estimate + err_measure);
+      current_estimate = last_estimate + kalman_gain * (mea - last_estimate);
+      err_estimate = (1.0f - kalman_gain) * err_estimate + fabsf(last_estimate - current_estimate) * q;
+      last_estimate = current_estimate;
+      return current_estimate;
+    }
+};
+
 float lowpassFilter(float input, float prev_output, float alpha);
 float medianFilter(float* data, int size);
+
 void Encoder_motor();
 void Encoder_arm();
 void Gyro();

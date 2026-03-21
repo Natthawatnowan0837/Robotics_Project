@@ -18,14 +18,6 @@ setup(
             # ส่วนหนึ่งใน data_files ของ setup.py
             (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
             (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
-
-            # ไฟล์ข้างในโฟลเดอร์ floor ต่างๆ
-            (os.path.join('share', package_name, 'maps/floor1'), glob('maps/floor1/*')),
-            (os.path.join('share', package_name, 'maps/floor2'), glob('maps/floor2/*')),
-            (os.path.join('share', package_name, 'maps/floor3'), glob('maps/floor3/*')),
-            (os.path.join('share', package_name, 'maps/floor4'), glob('maps/floor4/*')),
-
-            # ส่วนอื่นๆ (config, rviz, models) ทำเหมือนเดิม
             (os.path.join('share', package_name, 'config'), glob('config/*')),
             (os.path.join('share', package_name, 'rviz'), glob('rviz/*')),
             
@@ -46,9 +38,6 @@ setup(
         'console_scripts': [
             'controller_node = my_control.controller_node:main',
             'pid_parameters_node = my_control.pid_parameters:main',
-            'encoder_to_odom = my_control.encoder_to_odom:main',
-            'imu_data = my_control.imu_data:main',
-            'test_odom = my_control.test_odom:main',
             'client = my_control.client:main',
             'analysis_floor=my_control.analysis_floor:main',
             'obtacle_stop=my_control.obtacle_stop:main',

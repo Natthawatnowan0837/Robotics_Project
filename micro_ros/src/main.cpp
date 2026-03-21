@@ -22,7 +22,7 @@ std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_sensors,msg_sub_pid; // �
 geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_arm_vel;
 
 float motor_data[8]; // จองพื้นที่รับ (ปรับจำนวนได้)
-float sensors_data[10];
+float sensors_data[11];
 float pid_data[12];
 //-------------------
 float drive_report[4];
@@ -172,7 +172,7 @@ void setup() {
   msg_sub_motor.data.capacity = 8;
 
   msg_sub_sensors.data.data = sensors_data;
-  msg_sub_sensors.data.capacity = 10;
+  msg_sub_sensors.data.capacity = 11;
 
   msg_sub_pid.data.data = pid_data;
   msg_sub_pid.data.capacity = 12;

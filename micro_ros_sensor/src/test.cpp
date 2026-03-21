@@ -1,14 +1,58 @@
 // #include <Arduino.h>
 // #include <Wire.h>
-// #include "MS5611.h"
+// #include <MS5611.h>
 
 // #define TCAADDR 0x70
 // #define MS5611_CHANNEL 6
 
-// // สร้าง Object สำหรับ MS5611 (ระบุ Address 0x77 หรือ 0x76 ตามโมดูลของคุณ)
+// // ==========================================
+// // 1. นิยาม Class SimpleKalmanFilter (ย้ายออกมาไว้นอก loop)
+// // ==========================================
+// class SimpleKalmanFilter {
+//   private:
+//     float err_measure;
+//     float err_estimate;
+//     float q;
+//     float current_estimate;
+//     float last_estimate;
+//     float kalman_gain;
+//     bool is_initialized;
+
+//   public:
+//     SimpleKalmanFilter(float mea_e, float est_e, float q) {
+//       err_measure = mea_e;
+//       err_estimate = est_e;
+//       this->q = q;
+//       is_initialized = false;
+//     }
+
+//     float updateEstimate(float mea) {
+//       if (!is_initialized) {
+//         last_estimate = mea;
+//         current_estimate = mea;
+//         is_initialized = true;
+//       }
+//       kalman_gain = err_estimate / (err_estimate + err_measure);
+//       current_estimate = last_estimate + kalman_gain * (mea - last_estimate);
+//       err_estimate =  (1.0 - kalman_gain) * err_estimate + fabs(last_estimate - current_estimate) * q;
+//       last_estimate = current_estimate;
+//       return current_estimate;
+//     }
+// };
+
+// // ==========================================
+// // 2. ประกาศ Object และตัวแปร Global
+// // ==========================================
 // MS5611 ms5611(0x77); 
 
-// // ฟังก์ชันเลือกช่อง (Channel) ของ TCA
+// // สร้าง Object ของ Kalman Filter (ตั้งค่า Tuning ตามที่คุณให้มาล่าสุด)
+// SimpleKalmanFilter pressureKalman(0.1, 0.1, 0.05);
+// SimpleKalmanFilter tempKalman(0.1, 0.1, 0.05);
+
+// unsigned long last_read_time = 0;
+// const long interval = 500; 
+
+// // ฟังก์ชันเลือกช่อง TCA
 // void tcaSelect(uint8_t i) {
 //     if (i > 7) return;
 //     Wire.beginTransmission(TCAADDR);
@@ -21,50 +65,47 @@
 //     while (!Serial);
     
 //     Wire.begin(21, 22);
-//     Wire.setClock(100000); // 100kHz เพื่อความเสถียร
+//     Wire.setClock(100000); 
 
-//     Serial.println("\n--- MS5611 with TCA9548A (Channel 6) ---");
+//     Serial.println("\n--- MS5611 with Custom Kalman Class ---");
 
-//     // 1. เลือกช่อง 6 ก่อนเริ่มจัดการเซนเซอร์
 //     tcaSelect(MS5611_CHANNEL);
 //     delay(10);
 
-//     // 2. เริ่มต้น MS5611
 //     if (ms5611.begin() == true) {
-//         Serial.print("MS5611 found at Channel ");
+//         Serial.print("✅ MS5611 found at Channel ");
 //         Serial.println(MS5611_CHANNEL);
 //     } else {
-//         Serial.println("MS5611 NOT found. Check wiring on Channel 6!");
+//         Serial.println("❌ MS5611 NOT found!");
 //         while (1);
 //     }
 
-//     // 3. เปิดโหมด Adjusted Math (โหมดพิเศษของ Rob Tillaart)
-//     // การใส่พารามิเตอร์ 1 ใน reset() จะเปิดใช้งานสูตรคำนวณที่แม่นยำขึ้น
 //     ms5611.reset(1); 
-    
-//     // ตั้งค่าความละเอียดสูงสุด (Ultra High Oversampling)
 //     ms5611.setOversampling(OSR_ULTRA_HIGH);
 // }
 
 // void loop() {
-//     // เลือกช่อง 6 ทุกครั้งก่อนอ่านค่า (กรณีมีเซนเซอร์ช่องอื่นด้วย)
-//     tcaSelect(MS5611_CHANNEL);
+//     // อ่านค่าทุกๆ 500ms โดยไม่ใช้ delay
+//     if (millis() - last_read_time >= interval) {
+//         last_read_time = millis();
 
-//     // อ่านค่าจากเซนเซอร์
-//     int result = ms5611.read();
+//         tcaSelect(MS5611_CHANNEL);
 
-//     if (result == MS5611_READ_OK) {
-//         Serial.print("Temperature: ");
-//         Serial.print(ms5611.getTemperature(), 2);
-//         Serial.print(" °C\t");
-        
-//         Serial.print("Pressure: ");
-//         Serial.print(ms5611.getPressure(), 2);
-//         Serial.println(" hPa");
-//     } else {
-//         Serial.print("Error in read: ");
-//         Serial.println(result);
+//         int result = ms5611.read();
+
+//         if (result == MS5611_READ_OK) {
+//             float raw_p = ms5611.getPressure();
+//             float raw_t = ms5611.getTemperature();
+
+//             // ใช้งาน Kalman Filter ที่สร้างจาก Class ด้านบน
+//             float filtered_p = pressureKalman.updateEstimate(raw_p);
+//             float filtered_t = tempKalman.updateEstimate(raw_t);
+
+//             // แสดงผลเทียบกันให้เห็นความแตกต่าง
+//             Serial.print("Pressure Filtered: "); Serial.print(filtered_p, 2);
+//             Serial.print(" | Temp Filtered: "); Serial.println(filtered_t, 2);
+//         } else {
+//             Serial.println("⚠️ Sensor Read Error!");
+//         }
 //     }
-
-//     delay(1000); // รอ 1 วินาทีก่อนอ่านค่าถัดไป
 // }

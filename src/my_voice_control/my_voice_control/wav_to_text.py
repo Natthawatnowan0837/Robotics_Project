@@ -12,6 +12,7 @@ from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from gtts import gTTS
 from thefuzz import fuzz
 from ament_index_python.packages import get_package_share_directory
+from std_msgs.msg import String, Bool, Float32MultiArray # เพิ่มตัวนี้
 
 STATE_WAITING_WAKEWORD = 0
 STATE_LISTENING_COMMAND = 1
@@ -20,10 +21,16 @@ class VoiceCommandProcessor(Node):
     def __init__(self):
         super().__init__('wave_to_text_node')
         self.is_processing = False
-        # ROS Publishers & Subscribers
-        self.sub_audio_ready = self.create_subscription(String, '/audio_ready', self.audio_ready_callback, 10)
-        self.pub_whisper_done = self.create_publisher(Bool, '/whisper_done', 10)
-        self.pub_target = self.create_publisher(String, '/robot_target', 10)
+        
+        # --- [NEW] ระบบ Topic Communication ---
+        # 1. รอรับสัญญาณจาก VAD ว่า "อัดเสร็จแล้ว" (True)
+        self.sub_voice_state = self.create_subscription(Bool, '/voice_state', self.voice_state_callback, 10)
+        
+        # 2. ส่งสัญญาณสั่ง VAD ว่า "ให้เริ่มฟัง" หรือ "หยุดฟัง" (แทนการใช้ Service)
+        self.pub_listen = self.create_publisher(Bool, '/listen', 10)
+        
+        # Publishers อื่นๆ
+        self.pub_target = self.create_publisher(Float32MultiArray, '/robot_target', 10)
         self.pub_speaking_status = self.create_publisher(Bool, '/robot_is_speaking', 10)
 
         # Whisper Model Loading
@@ -38,41 +45,45 @@ class VoiceCommandProcessor(Node):
         self.load_commands()
         self.current_state = STATE_WAITING_WAKEWORD
         self.last_interaction_time = time.time()
-        self.MATCH_THRESHOLD = 85  # แนะนำให้ลดลงเหลือ 85 เพื่อให้สั่งงานง่ายขึ้น
-        self.TIMEOUT_SECONDS = 8.0
+        self.MATCH_THRESHOLD = 85 
+        self.TIMEOUT_SECONDS = 15.0
         self.command_retry_count = 0
+        self.AUDIO_FILE = "my_command.wav" # ชื่อไฟล์ที่ตกลงกับ VAD ไว้
 
-        # --- แก้ไขตรงนี้ ---
-        # ลบ self.speak(...) ตัวเดิมออก
-        # ใช้ Timer อย่างเดียวเพื่อให้ระบบเสถียรก่อนพูด
+        # เริ่มต้น: ทักทายและสั่งให้ VAD เริ่มฟัง
         self.greeting_timer = self.create_timer(2.0, self.say_greeting)
         self.timer = self.create_timer(1.0, self.check_timeout)
 
     def say_greeting(self):
         self.speak("สวัสดีครับ น้องพี พร้อมช่วยครับ")
-        self.greeting_timer.cancel() # หยุด Timer เพื่อไม่ให้พูดซ้ำทุก 2 วินาที
+        self.greeting_timer.cancel()
 
-    def audio_ready_callback(self, msg):
-        if self.is_processing:
-            return
-
-        audio_file_path = msg.data
-        if os.path.exists(audio_file_path):
-            self.process_audio(audio_file_path)
-        else:
-            self.send_unlock_signal()
+    def voice_state_callback(self, msg):
+        """เมื่อได้รับสัญญาณ True จาก VAD หมายถึงมีไฟล์อัดเสร็จแล้ว"""
+        if msg.data and not self.is_processing:
+            if os.path.exists(self.AUDIO_FILE):
+                self.process_audio(self.AUDIO_FILE)
+            else:
+                self.get_logger().warn(f"⚠️ สัญญาณมาแต่หาไฟล์ {self.AUDIO_FILE} ไม่เจอ")
+                self.send_listen_signal(True) # สั่งให้ฟังใหม่
 
     def process_audio(self, audio_file):
         self.is_processing = True
+        # เมื่อเริ่มประมวลผล สั่งปิดไมค์ VAD ทันทีเพื่อความชัวร์
+        self.send_listen_signal(False)
+        
         try:
             audio, sample_rate = sf.read(audio_file)
             input_features = self.processor(audio, sampling_rate=sample_rate, return_tensors="pt").input_features.to(self.device)
 
             with torch.no_grad():
                 predicted_ids = self.model.generate(input_features, language='th', task='transcribe')
+            
             raw_text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
+            
             if not raw_text:
-                self.get_logger().info("... Silence or No speech detected ...")
+                self.get_logger().info("... Silence ...")
+                self.send_listen_signal(True)
                 return
 
             print(f"\n🗣️ User said: {raw_text}")
@@ -83,20 +94,20 @@ class VoiceCommandProcessor(Node):
                 self.handle_command(raw_text)
 
         except Exception as e:
-            self.get_logger().error(f"❌ Error during processing: {e}")
+            self.get_logger().error(f"❌ Error: {e}")
+            self.send_listen_signal(True)
         finally:
             if os.path.exists(audio_file):
                 os.remove(audio_file)
-            self.send_unlock_signal()
             self.is_processing = False
 
-    def send_unlock_signal(self):
+    def send_listen_signal(self, status: bool):
+        """ส่งสัญญาณเปิด/ปิดไมค์ไปที่ VAD"""
         msg = Bool()
-        msg.data = True
-        self.pub_whisper_done.publish(msg)
+        msg.data = status
+        self.pub_listen.publish(msg)
 
     def handle_wake_word(self, text):
-        # ตรวจหา Wake word
         is_awake = any(kw in text for kw in self.wake_words)
         if not is_awake:
             for kw in self.wake_words:
@@ -107,73 +118,77 @@ class VoiceCommandProcessor(Node):
         if is_awake:
             self.current_state = STATE_LISTENING_COMMAND
             self.last_interaction_time = time.time()
-            self.command_retry_count = 0 # Reset counter เมื่อเจอ Wake word ใหม่
+            self.command_retry_count = 0
+            # ตรวจสอบว่ามีคำสั่งมาพร้อม Wake word เลยไหม
             action = self.find_action(text)
             room = self.find_room(text)
             if action and room:
-                print("⚡ เจอคำสั่งพ่วงมากับ Wake word เลย! ดำเนินการทันที...")
                 self.handle_command(text)
             else:
                 self.speak("ครับผม ว่าไงครับ")
         else:
-            print(f"💤 รอคำเรียก {self.wake_words} (ได้ยินเป็น: {text})")
+            self.send_listen_signal(True) # ไม่ใช่ wake word ให้ฟังใหม่
 
     def handle_command(self, text):
-        action = self.find_action(text)
-        room = self.find_room(text)
+            action = self.find_action(text)
+            room = self.find_room(text)
 
-        if action and room:
-            room_info = self.rooms_dict[room]
-            position = room_info.get("position")
-            if position and len(position) >= 3:
-                target_data = {
-                    "room_name": room,
-                    "action": action,
-                    "x": float(position[0]),
-                    "y": float(position[1]),
-                    "z": float(position[2])
-                }
-                for key, value in room_info.items():
-                    if key not in ["commands", "position"]:
-                        target_data[key] = value
-                msg = String()
-                msg.data = json.dumps(target_data, ensure_ascii=False)
-                self.pub_target.publish(msg)
-                self.provide_feedback(action, room)
-                # สำเร็จแล้วกลับไปรอ Wake word
-                self.current_state = STATE_WAITING_WAKEWORD
-                self.command_retry_count = 0
+            if action and room:
+                room_info = self.rooms_dict[room]
+                position = room_info.get("position") # สมมติว่าใน JSON เป็น [x, y, z]
+                
+                if position and len(position) >= 3:
+                    # สร้าง Message แบบ Float32MultiArray
+                    msg = Float32MultiArray()
+                    
+                    # ใส่ข้อมูลพิกัด x, y, z (และสามารถแถมเลข Action ID ถ้าต้องการ)
+                    # เช่น: [x, y, z]
+                    msg.data = [float(position[0]), float(position[1]), float(position[2])]
+                    
+                    self.pub_target.publish(msg)
+                    self.get_logger().info(f"📍 Published Target: {msg.data}")
+                    
+                    self.provide_feedback(action, room)
+                    self.current_state = STATE_WAITING_WAKEWORD
+                    self.command_retry_count = 0
+                else:
+                    self.speak(f"ข้อมูลพิกัดของห้อง{self.rooms_dict[room]['response']}ไม่สมบูรณ์ครับ")
+                    self.current_state = STATE_WAITING_WAKEWORD
             else:
-                self.speak(f"ข้อมูลพิกัดของห้อง{self.rooms_dict[room]['response']}ไม่ถูกต้องครับ")
-                self.current_state = STATE_WAITING_WAKEWORD
-        else:
-            # กรณีฟังคำสั่งไม่เข้าใจ
-            self.command_retry_count += 1
-            if self.command_retry_count >= 3:
-                self.speak("ขอโทษครับ เรียกผมใหม่นะครับ")
-                self.current_state = STATE_WAITING_WAKEWORD
-                self.command_retry_count = 0
-            else:
-                self.speak("ขอโทษครับ ไม่เข้าใจคำสั่ง ลองอีกครั้งนะครับ")
-                self.last_interaction_time = time.time() # ต่อเวลาให้พูดใหม่
+                # ... Logic เดิมกรณีไม่เข้าใจคำสั่ง ...
+                self.command_retry_count += 1
+                if self.command_retry_count >= 3:
+                    self.speak("เรียกผมใหม่นะครับ")
+                    self.current_state = STATE_WAITING_WAKEWORD
+                else:
+                    self.speak("ไม่เข้าใจคำสั่งครับ ลองอีกครั้งนะ")
 
     def check_timeout(self):
         if self.current_state == STATE_LISTENING_COMMAND:
             if time.time() - self.last_interaction_time > self.TIMEOUT_SECONDS:
                 self.speak("หมดเวลาครับ เรียกผมใหม่นะ")
                 self.current_state = STATE_WAITING_WAKEWORD
-                self.command_retry_count = 0
 
     def speak(self, text):
-        if not text: return
+        if not text: 
+            self.send_listen_signal(True)
+            return
+            
+        # บอกสถานะว่าหุ่นยนต์กำลังพูด (VAD จะได้รับทราบผ่าน Topic นี้ด้วย)
         self.pub_speaking_status.publish(Bool(data=True))
+        # ปิดไมค์ VAD ขณะพูด
+        self.send_listen_signal(False)
+        
         try:
+            self.get_logger().info(f"🔊 Robot speaking: {text}")
             tts = gTTS(text=text, lang='th')
             tts.save("feedback.mp3")
             playsound.playsound("feedback.mp3")
         finally:
             self.pub_speaking_status.publish(Bool(data=False))
             if os.path.exists("feedback.mp3"): os.remove("feedback.mp3")
+            # พูดจบแล้ว สั่งให้ VAD เริ่มฟังใหม่
+            self.send_listen_signal(True)
 
     def load_commands(self):
         try:
@@ -185,10 +200,8 @@ class VoiceCommandProcessor(Node):
                 self.actions_list = data["actions"]
                 self.rooms_dict = data["rooms"]
         except Exception as e:
-            self.get_logger().warn(f"⚠️ Could not load commands.json: {e}")
-            self.wake_words = ["พี", "ปี", "ดี"]
-            self.actions_list = []
-            self.rooms_dict = {}
+            self.get_logger().warn(f"⚠️ Load fail: {e}")
+            self.wake_words = ["พี", "ปี", "ดี"]; self.actions_list = []; self.rooms_dict = {}
 
     def find_action(self, text):
         for a in self.actions_list:

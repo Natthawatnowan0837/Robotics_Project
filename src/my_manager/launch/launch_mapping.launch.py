@@ -53,18 +53,10 @@ def generate_launch_description():
         }.items()
     )
 
-    # Fusion (EKF) - ต้องมีเพื่อให้ /odometry/filtered ทำงาน
-    fusion = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory(package_name), 'launch', 'launch_fusion.launch.py'
-        )]),
-        launch_arguments={'use_sim_time': 'false'}.items()
-    )
-
     rsp = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory(package_name), 'launch', 'rsp.launch.py'
-        )]), 
+            get_package_share_directory('my_control'), 'launch', 'rsp.launch.py'
+        )]),
         launch_arguments={'use_sim_time': 'false'}.items()
     )
     
@@ -75,22 +67,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}]
     )
 
-    # IMU Filter
-    imu_filter = Node(
-        package='imu_filter_madgwick',
-        executable='imu_filter_madgwick_node',
-        name='imu_filter',
-        parameters=[{
-            'use_mag': False,
-            'publish_tf': False,
-            'world_frame': 'enu'
-        }],
-        remappings=[
-            ('/imu/data_raw', '/camera/camera/imu'),
-            ('/imu/data', '/rtabmap/imu')
-        ]
-    )
-
     # --- 3. RTAB-Map Localization ---
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
@@ -98,27 +74,26 @@ def generate_launch_description():
         )]),
         launch_arguments={
             'database_path': database_full_path,
-            'localization': 'true', # เปิดโหมดระบุตำแหน่ง
+            'localization': 'false', # เปลี่ยนเป็น false เพื่อสร้างแผนที่ใหม่
+            'args': '--delete_db_on_start', # ถ้าต้องการเริ่มใหม่สะอาดๆ ทุกครั้งที่รัน (ระวังทับของเก่า!)
             'rtabmap_args': (
-                '--Mem/IncrementalMemory false ' # ปิดการอัปเดตแผนที่ (Localization เท่านั้น)
                 '--Reg/Strategy 0 '
                 '--RGBD/NeighborLinkRefining true '
                 '--Vis/MinInliers 12 '
                 '--Rtabmap/DetectionRate 1'
+                '--Mem/IncrementalMemory true '
             ),
             'approx_sync': 'true',
-            'approx_sync_max_interval': '0.15',
             'frame_id': 'base_link',
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
-            'visual_odometry': 'false',
-            'odom_topic': '/odometry/filtered',
-            'publish_tf_odom': 'false',
-            'imu_topic': '/rtabmap/imu',
+            'odom_topic': '/odometry/filtered',   
+            'imu_topic': '/imu/data_standard',   
+            'wait_imu_to_init': 'true',
+            'approx_sync': 'true',          
             'qos': '1',
             'rviz': 'true',
-            'rviz_cfg': rviz_config_path
         }.items()
     )
 
@@ -126,9 +101,7 @@ def generate_launch_description():
         floor_arg,
         db_name_arg,
         realsense,
-        fusion,
         rsp,
         node_joint_state_publisher,
-        imu_filter,
         TimerAction(period=3.0, actions=[rtabmap]),
     ])

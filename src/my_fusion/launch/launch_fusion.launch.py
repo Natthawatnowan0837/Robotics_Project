@@ -1,0 +1,58 @@
+import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    package_name = 'my_fusion'
+
+    # esp32_manager_node = Node(
+    #     package=package_name,
+    #     executable='esp32_manager',
+    #     name='esp32_manager_node',
+    #     output='screen'
+    # )
+    # 1. โหนดแปลงค่า Encoder เป็น Odometry ดิบ
+    encoders_node = Node(
+        package=package_name,
+        executable='encoder_to_odom',
+        name='encoder_to_odom_node',
+        output='screen'
+    )
+    
+    # 2. โหนดรับค่า IMU จาก ESP32
+    imu_node = Node(
+        package=package_name,
+        executable='imu_bridge',
+        name='imu_bridge_node',
+        output='screen'
+    )
+
+    # 3. โหนด EKF (Sensor Fusion) - เรียกใช้จากไฟล์ launch แยก
+    # มั่นใจว่ามีไฟล์ชื่อ ekf_launch.py อยู่ในโฟลเดอร์ launch ของคุณ
+    ekf_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory(package_name), 'launch', 'ekf_launch.py'
+        )]), 
+        launch_arguments={'use_sim_time': 'false'}.items()
+    )
+
+    # 4. โหนดทดสอบ/ตรวจสอบค่า Filtered (ถ้าคุณสร้างไว้เพื่อ print ค่า)
+    # หมายเหตุ: ปกติ EKF จะพ่น topic /odometry/filtered ออกมาเองอยู่แล้ว
+    odometry_test_node = Node(
+        package=package_name,
+        executable='odometry_filtered', # ตรวจสอบชื่อ executable ใน setup.py ให้ดี (ห้ามมีช่องว่างท้ายชื่อ)
+        name='odometry_filtered_test',
+        output='screen'
+    )
+
+    # --- ส่งโหนดทั้งหมดออกไปรัน ---
+    return LaunchDescription([
+        # esp32_manager_node,
+        encoders_node,
+        imu_node,
+        ekf_launch,
+        odometry_test_node
+    ])
