@@ -36,6 +36,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'main_command_node = my_control.main_command_node:main',
             'controller_node = my_control.controller_node:main',
             'pid_parameters_node = my_control.pid_parameters:main',
             'client = my_control.client:main',

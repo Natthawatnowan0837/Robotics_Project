@@ -61,34 +61,40 @@ class Check_floor(Node):
             return None
 
     def target_callback(self, msg):
-        """ เมื่อได้รับคำสั่งเป้าหมาย ให้ทำการเปรียบเทียบและส่ง Topic """
+        """ เมื่อได้รับคำสั่งเป้าหมาย ให้รวมข้อมูล X, Y และสถานะชั้นส่งไปที่ check_floor """
+        # ตรวจสอบว่ามีข้อมูล X, Y, Target_Floor และ AI คำนวณชั้นปัจจุบันได้แล้ว
         if len(msg.data) >= 3 and self.current_floor is not None:
-            target_val = float(msg.data[2])
+            target_x = float(msg.data[0])
+            target_y = float(msg.data[1])
+            target_f = float(msg.data[2])
             current_f = float(self.current_floor)
-            
-            self.get_logger().info(f"🎯 ตำแหน่ง target : {target_val}")
             
             check_msg = Float32MultiArray()
             
-            if target_val == current_f:
+            # ตรรกะการเช็คชั้นและการรวมข้อมูล [X, Y, Current_Floor, Status]
+            if target_f == current_f:
                 # กรณีชั้นเดียวกัน
-                self.get_logger().info("✅ ชั้นเดียวกัน")
-                check_msg.data = [0.0]
+                self.get_logger().info(f"✅ อยู่ชั้น {current_f} เหมือนกัน (ไปที่ X:{target_x}, Y:{target_y})")
+                check_msg.data = [target_x, target_y, current_f, 0.0]
             
-            elif target_val > current_f:
-                # กรณีเป้าหมายอยู่สูงกว่า
-                self.get_logger().info(f"🔼 เป้าหมาย {target_val} > ตำแหน่งจริง {current_f} : ขึ้นบันได")
-                check_msg.data = [current_f, 1.0]
+            elif target_f > current_f:
+                # กรณีเป้าหมายอยู่สูงกว่า -> ส่งสถานะ 1.0 (ขึ้น)
+                self.get_logger().info(f"🔼 เป้าหมายชั้น {target_f} > จริง {current_f} : ไปบันไดเพื่อขึ้น")
+                check_msg.data = [target_x, target_y, current_f, 1.0]
                 
-            elif target_val < current_f:
-                # กรณีเป้าหมายอยู่ต่ำกว่า
-                self.get_logger().info(f"🔽 เป้าหมาย {target_val} < ตำแหน่งจริง {current_f} : ลงบันได")
-                check_msg.data = [current_f, -1.0]
+            elif target_f < current_f:
+                # กรณีเป้าหมายอยู่ต่ำกว่า -> ส่งสถานะ -1.0 (ลง)
+                self.get_logger().info(f"🔽 เป้าหมายชั้น {target_f} < จริง {current_f} : ไปบันไดเพื่อลง")
+                check_msg.data = [target_x, target_y, current_f, -1.0]
             
+            # ส่งข้อมูลรวมทั้งหมดออกไป
             self.pub_check_floor.publish(check_msg)
         else:
-            self.get_logger().warn("⚠️ ยังไม่มีข้อมูลชั้นจริงหรือเป้าหมายไม่ครบ")
-
+            if self.current_floor is None:
+                self.get_logger().warn("⚠️ AI ยังระบุชั้นปัจจุบันไม่ได้ (รอข้อมูลจาก sensors)", throttle_duration_sec=2.0)
+            else:
+                self.get_logger().warn("⚠️ ข้อมูล robot_target ไม่ครบ (ต้องการ X, Y, Floor)", throttle_duration_sec=2.0)
+                
     def sensors_array_callback(self, msg):
         """ อัปเดตและโชว์ตำแหน่งจริงตลอดเวลา """
         if len(msg.data) >= 11:

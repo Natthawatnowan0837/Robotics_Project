@@ -117,18 +117,19 @@ class VoiceCommandProcessor(Node):
 
         if is_awake:
             self.current_state = STATE_LISTENING_COMMAND
-            self.last_interaction_time = time.time()
+            self.last_interaction_time = time.time() # รีเซ็ตจุดเริ่มต้นของ Timeout
             self.command_retry_count = 0
-            # ตรวจสอบว่ามีคำสั่งมาพร้อม Wake word เลยไหม
+            
+            # เช็คคำสั่งพร้อม Wake word
             action = self.find_action(text)
             room = self.find_room(text)
             if action and room:
                 self.handle_command(text)
             else:
                 self.speak("ครับผม ว่าไงครับ")
+                # เมื่อพูดจบ VAD จะถูกสั่ง listen=True ทำให้เริ่มนับ 8.0 วินาทีใหม่ของฝั่ง VAD
         else:
-            self.send_listen_signal(True) # ไม่ใช่ wake word ให้ฟังใหม่
-
+            self.send_listen_signal(True) # ไม่ใช่ wake word ให้เริ่มฟังรอบใหม่ทันที
     def handle_command(self, text):
             action = self.find_action(text)
             room = self.find_room(text)
@@ -164,20 +165,32 @@ class VoiceCommandProcessor(Node):
                     self.speak("ไม่เข้าใจคำสั่งครับ ลองอีกครั้งนะ")
 
     def check_timeout(self):
+        """ตรวจสอบว่ารอคำสั่งจากผู้ใช้นานเกินไปหรือไม่"""
+        # --- [เพิ่มจุดนี้] ---
+        # ถ้ากำลังประมวลผลเสียง หรือหุ่นยนต์กำลังพูดอยู่ ไม่ต้องเช็ค Timeout
+        if self.is_processing:
+            return
+
         if self.current_state == STATE_LISTENING_COMMAND:
-            if time.time() - self.last_interaction_time > self.TIMEOUT_SECONDS:
-                self.speak("หมดเวลาครับ เรียกผมใหม่นะ")
+            current_time = time.time()
+            elapsed_time = current_time - self.last_interaction_time
+            
+            if elapsed_time > self.TIMEOUT_SECONDS:
+                self.get_logger().info(f"⏰ Timeout reached ({elapsed_time:.1f}s)")
                 self.current_state = STATE_WAITING_WAKEWORD
+                # เมื่อเรียก speak() มันจะไปรีเซ็ตเวลาให้เองที่ตอนจบฟังก์ชัน
+                self.speak("หมดเวลาครับ เรียกผมใหม่นะ")
+                self.command_retry_count = 0
 
     def speak(self, text):
         if not text: 
             self.send_listen_signal(True)
             return
             
-        # บอกสถานะว่าหุ่นยนต์กำลังพูด (VAD จะได้รับทราบผ่าน Topic นี้ด้วย)
+        # บอกโลกว่ากำลังพูด และปิดไมค์
         self.pub_speaking_status.publish(Bool(data=True))
-        # ปิดไมค์ VAD ขณะพูด
         self.send_listen_signal(False)
+        self.is_processing = True # ล็อคไว้ไม่ให้ check_timeout ทำงานแทรก
         
         try:
             self.get_logger().info(f"🔊 Robot speaking: {text}")
@@ -187,9 +200,16 @@ class VoiceCommandProcessor(Node):
         finally:
             self.pub_speaking_status.publish(Bool(data=False))
             if os.path.exists("feedback.mp3"): os.remove("feedback.mp3")
-            # พูดจบแล้ว สั่งให้ VAD เริ่มฟังใหม่
+            
+            # --- [จุดสำคัญ] ---
+            # 1. รีเซ็ตเวลาเพื่อเริ่มนับ 15 วิใหม่ "วินาทีที่พูดจบ"
+            self.last_interaction_time = time.time() 
+            # 2. ปลดล็อคสถานะประมวลผล
+            self.is_processing = False
+            # 3. สั่ง VAD เริ่มฟัง (ซึ่ง VAD ของคุณจะเริ่มนับ 8 วิของมันใหม่)
             self.send_listen_signal(True)
-
+            self.get_logger().info("🔄 Timer & Mic Reset: Ready for next input.")
+    
     def load_commands(self):
         try:
             pkg_share = get_package_share_directory('my_voice_control')

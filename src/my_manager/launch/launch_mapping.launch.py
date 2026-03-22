@@ -94,6 +94,7 @@ def generate_launch_description():
             'approx_sync': 'true',          
             'qos': '1',
             'rviz': 'true',
+            'rviz_cfg': rviz_config_path ,
         }.items()
     )
 

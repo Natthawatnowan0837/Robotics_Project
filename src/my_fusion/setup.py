@@ -29,7 +29,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'esp32_manager = my_fusion.esp32_manager:main',
             'encoder_to_odom = my_fusion.encoder_to_odom:main',
             'imu_bridge = my_fusion.imu_bridge:main',
             'odometry_filtered = my_fusion.odometry_filtered:main',

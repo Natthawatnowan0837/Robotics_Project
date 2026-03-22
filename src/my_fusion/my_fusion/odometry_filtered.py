@@ -44,7 +44,7 @@ class odometry_filtered_Node(Node):
 
 def main():
     rclpy.init()
-    node = EKFTestNode()
+    node = odometry_filtered_Node()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

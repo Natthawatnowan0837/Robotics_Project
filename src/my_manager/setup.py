@@ -41,6 +41,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'esp32_manager = my_manager.esp32_manager:main',
             'my_manager = my_manager.my_manager:main',
             'check_floor = my_manager.check_floor:main',
             'check_localize = my_manager.check_localize:main',

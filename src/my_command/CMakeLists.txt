@@ -5,29 +5,34 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# ---------------------------------------------------------
+# 1. FIND DEPENDENCIES
+# ---------------------------------------------------------
 find_package(ament_cmake REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(action_msgs REQUIRED) # <--- จำเป็นมากสำหรับ .action
 find_package(rosidl_default_generators REQUIRED)
 
-# สร้าง Interfaces (Srv)
+# ---------------------------------------------------------
+# 2. GENERATE INTERFACES (Srv & Action)
+# ---------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Command.srv"
   "srv/Conversation.srv"
   "srv/Sendposition.srv" 
   "srv/CheckFloor.srv"
-  DEPENDENCIES std_msgs
+  "action/ExecuteCommand.action" # <--- ย้ายมาอยู่ในโฟลเดอร์ action/ ตามคอนเวนชั่น
+  DEPENDENCIES std_msgs action_msgs # <--- เพิ่ม action_msgs ตรงนี้ด้วย
 )
 
 # ---------------------------------------------------------
-# 1. ติดตั้ง Python Node (Executables)
+# 3. INSTALL PYTHON SCRIPTS
 # ---------------------------------------------------------
+# สำหรับ ROS 2 ที่เป็น ament_cmake แต่มีไฟล์ python 
+# แนะนำให้ติดตั้งลงใน lib ของ package เพื่อให้ ros2 run หาเจอ
 
-# 1.1: เฉพาะ map_switcher.py ที่ต้องการเปลี่ยนชื่อ (ตัด .py ออก)
-# เวลาใช้พิมพ์: ros2 run my_command_pkg map_switche
-
-# 1.2: ไฟล์ Python อื่นๆ ที่ต้องการติดตั้งแบบชื่อเดิม
-# เวลาใช้พิมพ์: ros2 run my_command_pkg simple_test.py
-
-
+# ---------------------------------------------------------
+# 4. AMENT PACKAGE
+# ---------------------------------------------------------
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()

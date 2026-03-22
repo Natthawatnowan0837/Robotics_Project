@@ -29,8 +29,6 @@ setup(
             'mic_checker = my_voice_control.mic_checking:main',
             'vad_to_wav = my_voice_control.vad_to_wav:main',
             'wav_to_text = my_voice_control.wav_to_text:main',
-            'voice_speech =my_voice_control.voice_speech:main',
-            'voice_processor = my_voice_control.voice_processor:main',
             'gui = my_voice_control.gui:main', 
         ],
     },
