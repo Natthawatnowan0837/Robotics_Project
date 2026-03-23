@@ -1,73 +1,113 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from ament_index_python.packages import get_package_share_directory
-# แก้ไข: เปลี่ยนจาก Int32 เป็น Int32MultiArray
-from std_msgs.msg import Float32MultiArray, Int32MultiArray 
-import os
+from std_msgs.msg import Float32MultiArray, String 
 
-class My_manager(Node):
+class MyManager(Node):  # เปลี่ยนชื่อคลาสให้เป็น CamelCase ตามสไตล์ Python
     def __init__(self):
         super().__init__('my_manager')
         
-        self.package_share = get_package_share_directory('my_manager')
+        # --- ตัวแปรภายใน ---
+        self.mode = 0.0
+        self.way = 0.0
+        self.floor = 0.0
+        self.x = 0.0  # สมมติค่าเริ่มต้น
+        self.y = 0.0
 
-        # 1. Subscribe ข้อมูลเซนเซอร์/ชั้น
-        self.sub_sensors = self.create_subscription(
+        self.is_localized_finished = False
+        self.is_nav_mode = False
+        self.is_nav_active = False
+
+        # --- Subscriptions ---
+        # 1. รับข้อมูลการจัดการ (mode, way, floor)
+        self.sub_manager_data = self.create_subscription(
             Float32MultiArray,
-            'check_floor',
-            self.check_floor_callback,
+            '/my_manager_data',
+            self.manager_data_callback,
+            10)
+        
+        # 2. รับสถานะจากระบบ (localize, action, nav2)
+        self.sub_status = self.create_subscription(
+            String,
+            'status',
+            self.status_callback,
             10)
 
-        # 2. Publisher: เปลี่ยน Topic 'active' ให้ส่งเป็น Int32MultiArray
-        self.pub_active_localize = self.create_publisher(
-            Int32MultiArray,
-            'active',
-            10)
+        # --- Publishers ---
+        self.pub_action = self.create_publisher(String, 'action', 10)
+        self.pub_opening = self.create_publisher(Float32MultiArray, 'opening', 10)
+        self.pub_update_target = self.create_publisher(Float32MultiArray, 'update_target', 10)
 
-        self.get_logger().info("🚀 My Manager Node started (Array Mode)...")
+        self.get_logger().info("🚀 My Manager Node started...")
 
-    def check_floor_callback(self, msg):
-        if len(msg.data) >= 4:
-            target_x  = msg.data[0]
-            target_y  = msg.data[1]
-            current_f = msg.data[2]
-            status    = msg.data[3]
-            
-            # --- แก้ไข: ส่งค่าเป็น [check_localize, 1] ---
-            # สมมติว่าค่า check_localize คือค่า status หรือค่าที่คุณกำหนดไว้ 
-            # ในที่นี้ผมใส่เป็นตัวอย่างให้เห็นโครงสร้าง [ค่าสถานะ, 1]
-            active_msg = Int32MultiArray()
-            
-            # ใส่ข้อมูลลงใน list (ตัวอย่าง: [int(status), 1])
-            # คุณสามารถเปลี่ยน int(status) เป็นตัวแปรอื่นที่ต้องการได้
-            active_msg.data = [int(status), 1] 
-            
-            self.pub_active_localize.publish(active_msg)
-            # ---------------------------------------
+    def manager_data_callback(self, msg):
+            """ เมื่อได้รับข้อมูลใหม่ (เช่น Way เปลี่ยน) ให้ Reset สถานะทั้งหมดเพื่อเริ่มใหม่ """
+            if len(msg.data) >= 3:
+                # ตรวจสอบก่อนว่าข้อมูลเปลี่ยนจริงไหม (ป้องกันการเริ่มใหม่ซ้ำซากถ้าข้อมูลเดิมส่งมา)
+                if self.mode != msg.data[0] or self.way != msg.data[1] or self.floor != msg.data[2]:
+                    
+                    self.mode = msg.data[0]
+                    self.way = msg.data[1]
+                    self.floor = msg.data[2]
+                    
+                    self.get_logger().info(f"📊 NEW DATA RECEIVED: Resetting State Machine to Start Localization...")
 
-            status_text = ""
-            if status == 0.0:
-                status_text = "✅ ถึงชั้นเป้าหมายแล้ว (MOVE TO TARGET)"
-            elif status == 1.0:
-                status_text = "🔼 ต้องขึ้นบันได (GO TO STAIR UP)"
-            elif status == -1.0:
-                status_text = "🔽 ต้องลงบันได (GO TO STAIR DOWN)"
+                    # --- [จุดสำคัญ: Reset ทุกอย่างเพื่อเริ่มใหม่หมด] ---
+                    self.is_localized_finished = False
+                    self.is_nav_mode = False
+                    self.is_nav_active = False
+                    # ------------------------------------------
 
-            self.get_logger().info("---------------------------------------")
-            # แสดงค่าที่ส่งออกไปใน Logger
-            self.get_logger().info(f"📤 Sent to 'active': {active_msg.data}") 
-            self.get_logger().info(f"📍 [Floor Status]: {status_text}")
-            self.get_logger().info(f"🏠 [Current Floor]: {int(current_f)}")
-            self.get_logger().info(f"🎯 [Target Pose]: X={target_x:.2f}, Y={target_y:.2f}")
-            self.get_logger().info("---------------------------------------")
+                    # ส่งไปที่ opening เพื่อให้ LaunchSwitcher เปิดโหมด (Localize/Map) ใหม่ตาม Way ที่เปลี่ยน
+                    opening_msg = Float32MultiArray()
+                    opening_msg.data = [float(self.mode), float(self.way), float(self.floor)]
+                    self.pub_opening.publish(opening_msg)
+                else:
+                    self.get_logger().info("📊 Received duplicate data, ignoring reset.")
+
+    def status_callback(self, msg):
+        """ รับค่าจาก Topic 'status' และเปลี่ยน State ของหุ่นยนต์ """
+        received_status = msg.data.lower()
+        self.get_logger().info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        self.get_logger().info(f"📩 [RECEIVED STATUS]: {msg.data}")
+        
+        # 1. เช็ค Localize
+        if 'localize,done' in received_status:
+            self.is_localized_finished = True
+            self.get_logger().info("🎯 Localization SUCCESS! Sending 'action'")
+            self.send_action("action")
+
+        # 2. เช็ค Action
+        elif 'action,done' in received_status:
+            self.is_nav_mode = True
+            self.get_logger().info("🎯 Action SUCCESS! Sending 'position and nav2'")
+            self.send_action("position")
+            self.send_action("nav2")
+
+        elif 'final,done' in received_status:
+            self.is_nav_mode = True
+            self.get_logger().info("🎯 Action SUCCESS! Sending 'nav2'")
             
-        else:
-            self.get_logger().warn(f"⚠️ ข้อมูลจาก check_floor ไม่ครบ", throttle_duration_sec=2.0)
+
+        # 3. เช็ค Nav2
+        elif 'nav2,done' in received_status:
+            self.is_nav_active = True 
+            self.get_logger().info("🏁 Navigator READY! Publishing update_target...")
+            
+            update_msg = Float32MultiArray()
+            update_msg.data = [float(self.x), float(self.y)]
+            self.pub_update_target.publish(update_msg)
+            
+        self.get_logger().info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+    def send_action(self, text):
+        msg = String()
+        msg.data = text
+        self.pub_action.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = My_manager()
+    node = MyManager()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

@@ -43,8 +43,10 @@ setup(
         'console_scripts': [
             'esp32_manager = my_manager.esp32_manager:main',
             'my_manager = my_manager.my_manager:main',
+            'test_room = my_manager.test_room:main',
             'check_floor = my_manager.check_floor:main',
             'check_localize = my_manager.check_localize:main',
+            'check_position = my_manager.check_position:main',
             'select_map = my_manager.select_map:main'
         ],
     },

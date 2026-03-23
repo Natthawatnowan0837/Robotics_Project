@@ -14,6 +14,8 @@ def generate_launch_description():
         )
     )
 
+
+
 #--------------------------------------------------------------------------
     esp32_manager = Node(
         package='my_manager',
