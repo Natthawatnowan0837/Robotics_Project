@@ -38,7 +38,7 @@ setup(
         'console_scripts': [
             'main_command_node = my_control.main_command_node:main',
             'controller_node = my_control.controller_node:main',
-            'pid_parameters_node = my_control.pid_parameters:main',
+            'pid_parameters = my_control.pid_parameters:main',
             'client = my_control.client:main',
             'analysis_floor=my_control.analysis_floor:main',
             'obtacle_stop=my_control.obtacle_stop:main',

@@ -1,0 +1,5 @@
+string mode
+string way
+float32 floor
+---
+string status

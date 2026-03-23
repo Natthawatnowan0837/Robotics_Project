@@ -27,7 +27,7 @@ class MapNavigator(Node):
 
         # --- [ Subscriptions ] ---
         self.sub_action = self.create_subscription(String, 'action', self.action_callback, 10)
-        self.sub_target = self.create_subscription(Float32MultiArray, 'update_target', self.target_callback, 10)
+        self.sub_target = self.create_subscription(Float32MultiArray, 'final_target', self.target_callback, 10)
 
         # Timer: เช็คเงื่อนไขทุก 1 วินาที
         self.timer = self.create_timer(1.0, self.navigation_logic_loop)

@@ -8,13 +8,13 @@ from launch_ros.actions import Node
 def generate_launch_description():
     package_name = 'my_fusion'
 
-    # esp32_manager_node = Node(
-    #     package=package_name,
-    #     executable='esp32_manager',
-    #     name='esp32_manager_node',
-    #     output='screen'
-    # )
-    # 1. โหนดแปลงค่า Encoder เป็น Odometry ดิบ
+    esp32_manager_node = Node(
+        package='my_manager',
+        executable='esp32_manager',
+        name='esp32_manager_node',
+        output='screen'
+    )
+
     encoders_node = Node(
         package=package_name,
         executable='encoder_to_odom',
@@ -47,10 +47,17 @@ def generate_launch_description():
         name='odometry_filtered_test',
         output='screen'
     )
+    pid_node = Node(
+        package='my_control',
+        executable='pid_parameters',
+        name='pid_node',
+        output='screen'
+    )
 
     # --- ส่งโหนดทั้งหมดออกไปรัน ---
     return LaunchDescription([
-        # esp32_manager_node,
+        pid_node,
+        esp32_manager_node,
         encoders_node,
         imu_node,
         ekf_launch,

@@ -11,6 +11,7 @@ def get_data_files():
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
     ]
 
 
@@ -43,11 +44,11 @@ setup(
         'console_scripts': [
             'esp32_manager = my_manager.esp32_manager:main',
             'my_manager = my_manager.my_manager:main',
-            'test_room = my_manager.test_room:main',
+            'nav_goal = my_manager.nav_goal:main',
             'check_floor = my_manager.check_floor:main',
             'check_localize = my_manager.check_localize:main',
             'check_position = my_manager.check_position:main',
-            'select_map = my_manager.select_map:main'
+            'open_map = my_manager.open_map:main'
         ],
     },
 )

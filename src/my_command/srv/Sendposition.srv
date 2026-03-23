@@ -1,9 +1,0 @@
-# Request (สิ่งที่ voice_processor ส่งไป)
-string room_name
-float32 x
-float32 y
-float32 z
----
-# Response (สิ่งที่ Robot ตอบกลับมา)
-bool success
-string message

@@ -17,12 +17,12 @@ find_package(rosidl_default_generators REQUIRED)
 # 2. GENERATE INTERFACES (Srv & Action)
 # ---------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/Command.srv"
   "srv/Conversation.srv"
-  "srv/Sendposition.srv" 
   "srv/CheckFloor.srv"
-  "action/ExecuteCommand.action" # <--- ย้ายมาอยู่ในโฟลเดอร์ action/ ตามคอนเวนชั่น
-  DEPENDENCIES std_msgs action_msgs # <--- เพิ่ม action_msgs ตรงนี้ด้วย
+  "srv/OpenMap.srv" 
+  "srv/CheckLocalize.srv"
+  "srv/CheckPosition.srv"
+  "srv/Nav2.srv"
 )
 
 # ---------------------------------------------------------

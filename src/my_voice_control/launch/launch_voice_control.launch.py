@@ -23,23 +23,7 @@ def generate_launch_description():
         additional_env={'PYTHONUNBUFFERED': '1'} # เพิ่มด้วย
     )
 
-    # voice_speech = Node(
-    #     package=package_name,
-    #     executable='voice_speech', # แก้ไขจากเดิมที่เป็น vad_to_wav
-    #     name='voice_speech_node',
-    #     output='screen'
-    # )
-    # 3. Node ประมวลผลคำสั่งเสียง
-    voice_processor = Node(
-        package=package_name,
-        executable='voice_processor', # มั่นใจว่าไม่มี space ข้างหน้าชื่อ
-        name='voice_processor_node',
-        output='screen'
-    )
-
     return LaunchDescription([
         vad_to_wav,
         wav_to_text,
-        # voice_speech,
-        voice_processor
     ])

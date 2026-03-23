@@ -7,22 +7,16 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    voice_command_path = get_package_share_directory('my_voice_control')
-    launch_voice_command = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(voice_command_path, 'launch', 'launch_voice_control.launch.py')
-        )
-    )
+    # voice_command_path = get_package_share_directory('my_voice_control')
+    # launch_voice_command = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         os.path.join(voice_command_path, 'launch', 'launch_voice_control.launch.py')
+    #     )
+    # )
 
 
 
 #--------------------------------------------------------------------------
-    esp32_manager = Node(
-        package='my_manager',
-        executable='esp32_manager',
-        name='esp32_manager_node',
-        output='screen'
-    )
 
     my_manager_run = Node(
         package='my_manager',
@@ -31,14 +25,13 @@ def generate_launch_description():
         output='screen'
     )
 
-    select_map = Node(
+    open_map = Node(
         package='my_manager',
-        executable='select_map',
-        name='select_map_node',
+        executable='open_map',
+        name='open_map_node',
         output='screen'
     )
     
-
     check_floor = Node(
         package='my_manager',
         executable='check_floor',
@@ -52,20 +45,36 @@ def generate_launch_description():
         name='check_localize_node',
         output='screen'
     )
-#--------------------------------------------------------------------------
-    fusion_sensors_path = get_package_share_directory('my_fusion')
-    launch_fusion_sensors = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(fusion_sensors_path, 'launch', 'launch_fusion.launch.py')
-        )
+
+    check_position = Node(
+        package='my_manager',
+        executable='check_position',
+        name='check_position_node',
+        output='screen'
+    )
+        
+    nav2 = Node(
+        package='my_manager',
+        executable='nav_goal',
+        name='nav2_node',
+        output='screen'
     )
 
+    main_command_node = Node(
+        package='my_control',
+        executable='main_command_node',
+        name='main_command_node',
+        output='screen'
+    )
+#--------------------------------------------------------------------------
+
     return LaunchDescription([
-        launch_voice_command,
-        esp32_manager,
+        # launch_voice_command,
         my_manager_run,
-        select_map,
+        open_map,
         check_floor,
         check_localize,
-        launch_fusion_sensors
+        check_position,
+        main_command_node,
+        nav2
     ])

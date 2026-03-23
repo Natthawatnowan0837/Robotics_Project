@@ -1,4 +1,5 @@
 # Request (สิ่งที่ voice_processor ส่งไป)
-float32 z
+float32 floor
 ---
-float32 z
+float32 current_floor
+string status

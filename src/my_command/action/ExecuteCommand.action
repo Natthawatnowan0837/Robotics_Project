@@ -1,9 +1,0 @@
-# Goal: คำสั่งที่ส่งไป (เช่น fwd, left180)
-string command
----
-# Result: รายงานเมื่อทำงานเสร็จ
-bool success
-string message
----
-# Feedback: รายงานสถานะระหว่างทำ (เผื่อใช้ในอนาคต)
-float32 progress
