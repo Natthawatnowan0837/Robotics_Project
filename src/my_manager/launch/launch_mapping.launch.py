@@ -26,17 +26,21 @@ def generate_launch_description():
         description='ชื่อไฟล์ db (ไม่ต้องใส่ .db)'
     )
 
-    # สร้าง Path แบบ Dynamic (หาไฟล์จากใน install folder)
-    database_full_path = PathJoinSubstitution([
-        get_package_share_directory(package_name),
-        'maps',
-        LaunchConfiguration('floor'),
-        PythonExpression(["'", LaunchConfiguration('db_name'), ".db'"])
+    # FIXED: Corrected indentation here
+    home_directory = os.path.expanduser('~')
+    src_maps_path = os.path.join(
+        home_directory, 
+        'Robotics_Project/src/my_manager/maps'
+    )
+
+    # FIXED: Corrected indentation here
+    # สร้าง Path แบบ Dynamic ไปที่ src
+    database_full_path = PythonExpression([
+        f"'{src_maps_path}/' + '", LaunchConfiguration('floor'), 
+        f"/' + '", LaunchConfiguration('db_name'), ".db'"
     ])
 
     # --- 2. Nodes ต่างๆ ---
-
-    # Realsense (เพิ่ม initial_reset แก้ปัญหา Busy และ IMU หลุด)
     realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
@@ -48,7 +52,7 @@ def generate_launch_description():
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'initial_reset': 'true', # สำคัญมาก!
+            'initial_reset': 'true', 
             'depth_module.depth_visualization': 'true',
         }.items()
     )
@@ -74,8 +78,8 @@ def generate_launch_description():
         )]),
         launch_arguments={
             'database_path': database_full_path,
-            'localization': 'false', # เปลี่ยนเป็น false เพื่อสร้างแผนที่ใหม่
-            'args': '--delete_db_on_start', # ถ้าต้องการเริ่มใหม่สะอาดๆ ทุกครั้งที่รัน (ระวังทับของเก่า!)
+            'localization': 'false', 
+            'args': '--delete_db_on_start', 
             'rtabmap_args': (
                 '--Reg/Strategy 0 '
                 '--RGBD/NeighborLinkRefining true '
@@ -91,7 +95,6 @@ def generate_launch_description():
             'odom_topic': '/odometry/filtered',   
             'imu_topic': '/imu/data_standard',   
             'wait_imu_to_init': 'true',
-            'approx_sync': 'true',          
             'qos': '1',
             'rviz': 'true',
             'rviz_cfg': rviz_config_path ,
