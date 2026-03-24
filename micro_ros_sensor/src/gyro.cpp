@@ -11,6 +11,7 @@ Adafruit_MPU6050 mpuPlatform;
 // --- [ ตัวแปรเก็บค่ามุม (Filtered & Integration) ] ---
 float bodyRoll = 0, bodyPitch = 0, bodyYaw = 0;
 float anglePlatformX = 0, anglePlatformY = 0;
+float angleBodyX = 0, angleBodyY = 0;
 
 // --- [ ตัวแปรสำหรับ Calibration (Offset/Bias) ] ---
 float biasBodyX = 0, biasBodyY = 0, biasBodyZ = 0; 
@@ -84,44 +85,43 @@ void Gyro() {
     tcaSelect(0);
     mpuBody.getEvent(&a, &g, &temp);
     
-    // คำนวณมุมจาก Accelerometer และหักลบ Offset
+    // คำนวณมุมดิบจาก Accelerometer และหักลบ Offset
     float accRollBody  = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetBodyRoll;
     float accPitchBody = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetBodyPitch;
 
-    // แปลง Gyro Rate จาก rad/s (หัก bias) เป็น deg/s
+    // A. การคำนวณแบบเดิม (Complementary Filter) สำหรับ EKF
     float gyroX_deg = (g.gyro.x - biasBodyX) * 180.0f / PI;
     float gyroY_deg = (g.gyro.y - biasBodyY) * 180.0f / PI;
     float gyroZ_deg = (g.gyro.z - biasBodyZ) * 180.0f / PI;
 
-    // Complementary Filter ผสม Accel (ระยะยาว) + Gyro (ระยะสั้น)
     bodyRoll  = COMP_FILTER_GAIN * (bodyRoll + gyroX_deg * dt) + (1.0f - COMP_FILTER_GAIN) * accRollBody;
     bodyPitch = COMP_FILTER_GAIN * (bodyPitch + gyroY_deg * dt) + (1.0f - COMP_FILTER_GAIN) * accPitchBody;
-    
-    // Yaw: สะสมค่า Gyro Z (ใช้ในการเลี้ยวใน EKF)
-    bodyYaw += gyroZ_deg * dt; 
+    bodyYaw  += gyroZ_deg * dt; 
+
+    // B. การคำนวณแบบใหม่ (Low-pass Filter) เหมือนฝั่ง Platform
+    // ใช้ ALPHA_PLAT หรือจะตั้ง ALPHA_BODY ใหม่ก็ได้ครับ
+    angleBodyX = (ALPHA_PLAT * accRollBody) + ((1.0f - ALPHA_PLAT) * angleBodyX);
+    angleBodyY = (ALPHA_PLAT * accPitchBody) + ((1.0f - ALPHA_PLAT) * angleBodyY);
 
     // --- [ 3. ดึงข้อมูล PLATFORM (TCA 1) ] ---
     tcaSelect(1);
     mpuPlatform.getEvent(&a, &g, &temp);
 
-    // คำนวณมุมดิบ (องศา) และหัก Offset
     float rawPlatX = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetPlatX;
     float rawPlatY = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetPlatY;
 
-    // Low-pass Filter เพื่อให้ Platform นิ่งที่สุด
     anglePlatformX = (ALPHA_PLAT * rawPlatX) + ((1.0f - ALPHA_PLAT) * anglePlatformX);
     anglePlatformY = (ALPHA_PLAT * rawPlatY) + ((1.0f - ALPHA_PLAT) * anglePlatformY);
 
-    // --- [ 4. เก็บข้อมูลลง msg_sensors เพื่อส่งไป ROS 2 ] ---
-    // [0]=Roll, [1]=Pitch, [2]=Yaw (หัวใจหลักของ EKF)
+    // --- [ 4. เก็บข้อมูลลง msg_sensors ] ---
     msg_sensors.data.data[0] = bodyRoll;       
     msg_sensors.data.data[1] = bodyPitch;      
     msg_sensors.data.data[2] = bodyYaw;        
-    // ความเร็วเชิงมุม (deg/s) สำหรับ EKF angular_velocity
     msg_sensors.data.data[3] = gyroX_deg;      
     msg_sensors.data.data[4] = gyroY_deg;      
     msg_sensors.data.data[5] = gyroZ_deg;      
-    // ข้อมูลสำหรับคุม Platform
-    msg_sensors.data.data[6] = anglePlatformX; 
+    
+    // แก้ไขตามที่สั่ง: เปลี่ยนจาก PlatformX เป็น BodyY (แบบ Low-pass)
+    msg_sensors.data.data[6] = angleBodyY;     
     msg_sensors.data.data[7] = anglePlatformY; 
 }

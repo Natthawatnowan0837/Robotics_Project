@@ -114,7 +114,7 @@ class OpenMapServer(Node):
                 nav2_params = os.path.join(pkg_path, 'config', 'nav2_params.yaml')
             except:
                 # กรณีฉุกเฉินหาไฟล์ไม่เจอ ใช้ path ตรงๆ
-                nav2_params = '/home/noone/Robotics_Project/src/my_control/config/nav2_params.yaml'
+                nav2_params = '/home/noone/Robotics_Project/src/my_manager/config/nav2_params.yaml'
 
             nav2_command = [
                 'ros2', 'launch', 'nav2_bringup', 'navigation_launch.py',

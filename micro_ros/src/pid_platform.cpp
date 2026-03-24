@@ -14,8 +14,8 @@ float error_sensors = 5.0;
 // ปรับ Gain: Kp, Ki, Kd
 float P_Kp = 10.0, P_Ki = 0.0, P_Kd = 0.2; 
 
-unsigned long last_pid_time = 0;
-const unsigned long pid_interval = 20; 
+static long last_pid_time = 0;
+static unsigned long pid_interval = 20; 
 
 QuickPID Platform_PID(&Platform_Input, &Platform_Output, &Platform_Setpoint);
 
@@ -89,8 +89,8 @@ void pid_plateform(float anglePlatformY, float hall_effect) {
     Platform_drive(PlatformRight_R, PlatformRight_L, target_pwm * -1.0); 
 
     // Debug ข้อมูลส่งไป micro-ROS
-    msg_pub_balance.data.data[0] = anglePlatformY;
-    msg_pub_balance.data.data[1] = target_pwm; 
-    msg_pub_balance.data.data[2] = hall_effect;
-    RCSOFTCHECK(rcl_publish(&pub_balance, &msg_pub_balance, NULL));
+    msg_pub_statePlatform.data.data[0] = anglePlatformY;
+    msg_pub_statePlatform.data.data[1] = target_pwm; 
+    msg_pub_statePlatform.data.data[2] = hall_effect;
+    RCSOFTCHECK(rcl_publish(&pub_statePlatform, &msg_pub_statePlatform, NULL));
 }

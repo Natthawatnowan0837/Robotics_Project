@@ -39,11 +39,11 @@ extern float arm_control;
 extern float pid_driveL_parameters[3];
 extern float pid_driveR_parameters[3];
 extern float pid_platform_parameters[3];
+extern float pid_arm_parameters[3];
+extern rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm;
 
-extern rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
 
-extern std_msgs__msg__Float32 msg_pub_stateArm;
-extern std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; 
+extern std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_stateArm; 
 
 // // --- แชร์ฟังก์ชันและตัวแปร (Extern) ---
 void init_PID();
@@ -52,9 +52,11 @@ void pid_drive(float linear, float angular, float motorDrive_L, float motorDrive
 void init_plateformPID();
 void pid_plateform(float anglePlatformY,float hall_effect);
 
+void init_armPID();
+void pid_arm(float arm_control,float motorArm_L,float motorArm_R);
 // void pwm_motor(float linear_control,float angular_control);
 // void pwm_platform(float platform_control,float hall_effect);
-void pwm_arm(float arm_control);
+// void pwm_arm(float arm_control);
 
 
 #endif

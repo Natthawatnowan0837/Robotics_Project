@@ -12,12 +12,12 @@ rcl_allocator_t allocator;
 rclc_executor_t executor;
 rcl_timer_t timer;
 
-rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm,pub_balance;
+rcl_publisher_t pub_drive,pub_statePlatform,pub_stateArm;
 rcl_subscription_t sub_motor,sub_arm_vel,sub_sensors,sub_pid,
                     sub_cmd_vel;
 
-std_msgs__msg__Float32 msg_pub_stateArm;
-std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_balance; // สำหรับส่งออก
+
+std_msgs__msg__Float32MultiArray msg_pub_drive,msg_pub_statePlatform,msg_pub_stateArm; // สำหรับส่งออก
 std_msgs__msg__Float32MultiArray msg_sub_motor,msg_sub_sensors,msg_sub_pid; // สำหรับรับเข้า
 geometry_msgs__msg__Twist msg_cmd_vel,msg_sub_arm_vel;
 
@@ -26,9 +26,8 @@ float sensors_data[11];
 float pid_data[12];
 //-------------------
 float drive_report[4];
-float statePlatform_report[2];
-float balance_report[3];
-
+float statePlatform_report[3];
+float stateArm_report[3];
 //------------------------
 float motorDrive_L = 0.0f; 
 float motorDrive_R = 0.0f;
@@ -142,11 +141,8 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
     // pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
     pid_drive(current_linear_x*2.0,current_angular_z*2.0,motorDrive_L,motorDrive_R);
     pid_plateform(anglePlatformY,hall_effect);
-    // pwm_motor(current_linear_x,current_angular_z);
-    // pwm_platform(platform_control,hall_effect);
-    pwm_arm(linear_arm);
-    // หยอดข้อมูลลง pub_data[i] ก่อนส่ง
-    // RCSOFTCHECK(rcl_publish(&pub_data, &msg_pub, NULL));
+    pid_arm(linear_arm, motorArm_L,motorArm_R);
+    // pwm_arm(linear_arm);
   }
 }
 
@@ -160,6 +156,7 @@ void error_loop() {
 void setup() {
   init_PID();
   init_plateformPID();
+  init_armPID();
   set_microros_transports(); // เริ่มต้น Serial Transport
   
   allocator = rcl_get_default_allocator();
@@ -186,28 +183,27 @@ void setup() {
   msg_pub_drive.layout.data_offset = 0;
 
   msg_pub_statePlatform.data.data = statePlatform_report;
-  msg_pub_statePlatform.data.capacity = 2;
-  msg_pub_statePlatform.data.size = 2;
+  msg_pub_statePlatform.data.capacity = 3;
+  msg_pub_statePlatform.data.size = 3;
   msg_pub_statePlatform.layout.dim.capacity = 0;
   msg_pub_statePlatform.layout.dim.size = 0;
   msg_pub_statePlatform.layout.data_offset = 0;
+  
 
-  msg_pub_balance.data.data = balance_report;
-  msg_pub_balance.data.capacity = 3;
-  msg_pub_balance.data.size = 3;
-  msg_pub_balance.layout.dim.capacity = 0;
-  msg_pub_balance.layout.dim.size = 0;
-  msg_pub_balance.layout.data_offset = 0;
+  msg_pub_stateArm.data.data = stateArm_report;
+  msg_pub_stateArm.data.capacity = 3;
+  msg_pub_stateArm.data.size = 3;
+  msg_pub_stateArm.layout.dim.capacity = 0;
+  msg_pub_stateArm.layout.dim.size = 0;
+  msg_pub_stateArm.layout.data_offset = 0;
 
   // --- 2. เริ่มต้น Publisher และ Subscription ---
   RCCHECK(rclc_publisher_init_default(&pub_drive, &node, 
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stageDrive"));
   RCCHECK(rclc_publisher_init_default(&pub_statePlatform, &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stagePlatform"));  
-  RCCHECK(rclc_publisher_init_default(&pub_balance, &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "balance"));  
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stagePlatform"));   
   RCCHECK(rclc_publisher_init_default(&pub_stateArm, &node, 
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "stageArm"));  
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "stageArm"));  
 
   //----------------------------------------------
   RCCHECK(rclc_subscription_init_default(&sub_motor, &node, 
