@@ -1,0 +1,5 @@
+string active
+string state
+---
+string status
+float32 angle

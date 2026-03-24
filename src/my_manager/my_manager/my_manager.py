@@ -32,7 +32,7 @@ class StateManagerNode(Node):
         # ตัวแปรตามที่คุณกำหนด (เปลี่ยนจากตัวเลขเป็นข้อความ)
         self.mode = ['map', 'localize']
         self.way = ['go', 'back']
-        self.default_way = self.way[1] # 'back'
+        self.default_way = self.way[0] # 'back'
         self.goal = [0.0, 0.0]        
         self.back_goal = [0.0, 0.0]   
         self.floor = 0
@@ -130,31 +130,20 @@ class StateManagerNode(Node):
                 self.service_called = True
 
             # --- STATE: NAV2 ---
-# --- STATE: NAV2 (จุดหมายสุดท้าย) ---
+        # --- STATE: NAV2 (จุดหมายสุดท้าย) ---
         elif self.current_state == RobotState.NAV2:
-            if not self.service_called:
-                # ตรวจสอบว่าพิกัดเป้าหมายไม่ใช่ [0, 0]
-                if self.goal == [0.0, 0.0]:
-                    self.get_logger().error("❌ Goal is [0, 0]. Moving to IDLE.")
-                    self.current_state = RobotState.IDLE
-                    return
+                    if not self.service_called:
+                        # ตรวจสอบพิกัด
+                        if self.goal == [0.0, 0.0]:
+                            self.get_logger().error("❌ Goal is [0, 0]. Moving to IDLE.")
+                            self.current_state = RobotState.IDLE
+                            return
 
-                self.get_logger().info(f"🛰️ Calling Nav2 Service | Target: {self.goal}")
-                
-                req = Nav2.Request()
-                req.x = float(self.goal[0])
-                req.y = float(self.goal[1])
-                
-                # เรียก Service ไปที่โหนด nav_goal
-                future = self.cli_nav2.call_async(req)
-                # ผูก Callback เพื่อจัดการผลลัพธ์เมื่อหุ่นยนต์เดินถึงที่หมาย
-                future.add_done_callback(self.nav2_response_callback)
-                
-                # ล็อกไว้ว่าเรียก Service แล้ว (Timer รอบหน้าจะไม่เข้ามาตรงนี้)
-                self.service_called = True 
-            else:
-                # แสดง Log ทุกๆ 5 วินาทีระหว่างที่หุ่นกำลังเดิน (Optional)
-                self.get_logger().info("🚢 Robot is navigating... waiting for arrival.", throttle_duration_sec=5.0)
+                        # เรียกใช้ฟังก์ชันที่แยกไว้ (สะอาดกว่าและจัดการ error ง่ายกว่า)
+                        self.call_nav2_service() 
+                        self.service_called = True 
+                    else:
+                        self.get_logger().info("🚢 Robot is navigating... waiting for arrival.", throttle_duration_sec=5.0)
 
     def call_check_floor_service(self):
         while not self.cli.wait_for_service(timeout_sec=1.0):
@@ -314,19 +303,22 @@ class StateManagerNode(Node):
             self.current_state = RobotState.IDLE
 
     def call_nav2_service(self):
-        while not self.cli_nav2.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for Nav2 service...')
-        
-        req = Nav2.Request()
-        
-        # ส่งพิกัดจาก self.goal ตามที่คุณระบุ (x = index 0, y = index 1)
-        # หมายเหตุ: ใน prompt คุณเขียน self.goal[2] แต่ปกติ x จะอยู่ที่ index 0 ครับ
-        req.x = float(self.goal[0]) 
-        req.y = float(self.goal[1])
-        
-        self.get_logger().info(f"🛰️ Sending Final Goal to Nav2: X={req.x}, Y={req.y}")
-        future = self.cli_nav2.call_async(req)
-        future.add_done_callback(self.nav2_response_callback)
+            # --- เพิ่มการรอ Service ให้ชัวร์ขึ้น ---
+            self.get_logger().info('📡 Checking nav2_service availability...')
+            
+            # รอสูงสุด 10 วินาที ถ้ายังไม่มาให้ยกเลิกก่อน
+            if not self.cli_nav2.wait_for_service(timeout_sec=10.0):
+                self.get_logger().error('❌ nav2_service is NOT ONLINE after 10s! Check your nav_goal node.')
+                self.service_called = False # ให้ Timer รอบหน้าลองใหม่
+                return
+
+            req = Nav2.Request()
+            req.x = float(self.goal[0]) 
+            req.y = float(self.goal[1])
+            
+            self.get_logger().info(f"🛰️ Sending Final Goal to Nav2: X={req.x}, Y={req.y}")
+            future = self.cli_nav2.call_async(req)
+            future.add_done_callback(self.nav2_response_callback)
 
     def nav2_response_callback(self, future):
             try:

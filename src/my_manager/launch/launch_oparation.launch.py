@@ -60,10 +60,10 @@ def generate_launch_description():
         output='screen'
     )
 
-    main_command_node = Node(
-        package='my_control',
-        executable='main_command_node',
-        name='main_command_node',
+    rotation_control = Node(
+        package='my_manager',
+        executable='rotation_controle',
+        name='rotation_control_node',
         output='screen'
     )
 #--------------------------------------------------------------------------
@@ -75,6 +75,6 @@ def generate_launch_description():
         check_floor,
         check_localize,
         check_position,
-        main_command_node,
+        rotation_control,
         nav2
     ])

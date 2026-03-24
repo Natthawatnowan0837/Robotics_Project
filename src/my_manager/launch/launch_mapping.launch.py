@@ -16,6 +16,21 @@ def generate_launch_description():
         'localized.rviz'
     )
 
+    imu_filter = Node(
+        package='imu_filter_madgwick',
+        executable='imu_filter_madgwick_node',
+        name='imu_filter',
+        parameters=[{
+            'use_mag': False,
+            'publish_tf': False,
+            'world_frame': 'enu'
+        }],
+        remappings=[
+            ('/imu/data_raw', '/camera/camera/imu'),
+            ('/imu/data', '/rtabmap/imu')
+        ]
+    )
+
     # --- 1. Arguments สำหรับเลือก Floor และชื่อไฟล์ ---
     floor_arg = DeclareLaunchArgument(
         'floor', default_value='floor1',
@@ -81,29 +96,33 @@ def generate_launch_description():
             'localization': 'false', 
             'args': '--delete_db_on_start', 
             'rtabmap_args': (
-                '--Reg/Strategy 0 '
-                '--RGBD/NeighborLinkRefining true '
-                '--Vis/MinInliers 12 '
-                '--Rtabmap/DetectionRate 1'
-                '--Mem/IncrementalMemory true '
+                '--RGBD/NeighborLinkRefining false ' # ปิดการใช้ IMU ช่วยขัดเกลาลิงก์
+                '--Vis/MinInliers 20 '               # ค่า Default มาตรฐาน (มักจะอยู่ที่ 20)
+                '--Mem/IncrementalMemory true'
             ),
             'approx_sync': 'true',
             'frame_id': 'base_link',
+            # --- กล้อง ---
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
+            
+            # --- ส่วนที่แก้ไข: ตัด Fusion ออก ---
             'odom_topic': '/odometry/filtered',   
-            'imu_topic': '/imu/data_standard',   
-            'wait_imu_to_init': 'true',
+            'imu_topic': '/imu/data_standard',           # กลับไปใช้ Odom หลัก (ไม่ใช่ตัว filtered)
+            'subscribe_scan': 'false',           # ถ้าไม่ได้ใช้ Lidar ให้มั่นใจว่าเป็น false
+            'wait_imu_to_init': 'false',         # ไม่ต้องรอ IMU
+            # --- การตั้งค่าอื่นๆ ---
             'qos': '1',
             'rviz': 'true',
-            'rviz_cfg': rviz_config_path ,
+            'rviz_cfg': rviz_config_path,
         }.items()
     )
 
     return LaunchDescription([
         floor_arg,
         db_name_arg,
+        imu_filter,
         realsense,
         rsp,
         node_joint_state_publisher,

@@ -10,8 +10,8 @@ class KeyboardControllerNode(Node):
         super().__init__('keyboard_controller_node')
         
         # --- [ Configuration ] ---
-        self.declare_parameter('linear_speed', 0.3)
-        self.declare_parameter('angular_speed', 0.55)
+        self.declare_parameter('linear_speed', 0.35)
+        self.declare_parameter('angular_speed', 0.6)
         self.declare_parameter('arm_speed', 0.5)
         
         self.linear_max = self.get_parameter('linear_speed').value

@@ -1,5 +1,25 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="my_stair_robot">
+
+  <material name="red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+
+  <material name="gray_blue">
+    <color rgba="0.792 0.819 0.933 1.0"/>
+  </material>
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/> </joint>
+
   <link name="base_link">
     <inertial>
       <origin xyz="-0.00354503259395966 1.64922598910877E-08 -0.0275714174379754" rpy="0 0 0" />
@@ -11,7 +31,7 @@
       <geometry>
         <mesh filename="package://my_control/my_stair_robot/meshes/base_link.STL" />
       </geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -29,16 +49,12 @@
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" />
-      </geometry>
-      <material name=""><color rgba="0.796078431372549 0.823529411764706 0.937254901960784 1" /></material>
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" /></geometry>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" />
-      </geometry>
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/left_wheel.STL" /></geometry>
     </collision>
   </link>
 
@@ -59,16 +75,12 @@
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" />
-      </geometry>
-      <material name=""><color rgba="0.796078431372549 0.823529411764706 0.937254901960784 1" /></material>
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" /></geometry>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" />
-      </geometry>
+      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/right_wheel.STL" /></geometry>
     </collision>
   </link>
 
@@ -90,7 +102,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -103,7 +115,6 @@
     <parent link="base_link" />
     <child link="rear_caster" />
     <axis xyz="0 0 1" />
-    <dynamics damping="0.1" friction="0.02" />
   </joint>
 
   <link name="rear_caster_wheel">
@@ -115,7 +126,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_caster_wheel.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -128,7 +139,6 @@
     <parent link="rear_caster" />
     <child link="rear_caster_wheel" />
     <axis xyz="-0.00665576114394258 0 -0.99997785017649" />
-    <dynamics damping="0.1" friction="0.02" />
   </joint>
 
   <link name="front_left_arm">
@@ -140,7 +150,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_left_arm.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -153,8 +163,6 @@
     <parent link="base_link" />
     <child link="front_left_arm" />
     <axis xyz="0 0 1" />
-    <limit effort="236" velocity="2.6" />
-    <dynamics damping="0.1" friction="0.02" />
   </joint>
 
   <link name="left_arm_f">
@@ -166,7 +174,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/left_arm_f.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -191,7 +199,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/front_right_arm.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -204,8 +212,6 @@
     <parent link="base_link" />
     <child link="front_right_arm" />
     <axis xyz="0 0 1" />
-    <limit effort="236" velocity="2.6" />
-    <dynamics damping="0.1" friction="0.02" />
   </joint>
 
   <link name="right_arm_f">
@@ -217,7 +223,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/right_arm_f.STL" /></geometry>
-      <material name=""><color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" /></material>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -242,11 +248,8 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_left_arm.STL" /></geometry>
+      <material name="gray_blue"/>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_left_arm.STL" /></geometry>
-    </collision>
   </link>
 
   <joint name="rearleftarm" type="continuous">
@@ -266,11 +269,8 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_right_arm.STL" /></geometry>
+      <material name="gray_blue"/>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry><mesh filename="package://my_control/my_stair_robot/meshes/rear_right_arm.STL" /></geometry>
-    </collision>
   </link>
 
   <joint name="rearrightarm" type="continuous">
@@ -290,6 +290,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry><mesh filename="package://my_control/my_stair_robot/meshes/platform.STL" /></geometry>
+      <material name="gray_blue"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -306,34 +307,30 @@
     <dynamics damping="0.1" friction="0.02" />
   </joint>
 
-    <joint name="camera_joint" type="fixed">
-        <parent link="platform"/>
-        <child link="camera_link"/>
-        <origin xyz="0.04 -0.0 0" rpy="1.5708 0 0"/>
-    </joint>
+  <joint name="camera_joint" type="fixed">
+    <parent link="platform"/>
+    <child link="camera_link"/>
+    <origin xyz="0.04 -0.0 0" rpy="1.5708 0 0"/>
+  </joint>
 
-    <link name="camera_link">
-        <visual>
-            <geometry>
-                <box size="0.020 0.06 0.03"/>
-            </geometry>
-            <material name="red"/>
-        </visual>
-    </link>
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.020 0.06 0.03"/></geometry>
+      <material name="red"/>
+    </visual>
+  </link>
 
-    <joint name="imubody_joint" type="fixed">
-        <parent link="base_link"/>
-        <child link="imubody_link"/>
-        <origin xyz="-0.4 -0.2 0.0" rpy="0 0 0"/>
-    </joint>
+  <joint name="imubody_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imubody_link"/>
+    <origin xyz="-0.4 -0.2 0.0" rpy="0 0 0"/>
+  </joint>
 
-    <link name="imubody_link">
-        <visual>
-            <geometry>
-                <box size="0.01 0.03 0.01"/>
-            </geometry>
-            <material name="black"/>
-        </visual>
-    </link>
+  <link name="imubody_link">
+    <visual>
+      <geometry><box size="0.01 0.03 0.01"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
 
 </robot>

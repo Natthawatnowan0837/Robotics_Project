@@ -5,25 +5,30 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import PoseStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
-from my_command.srv import Nav2 # Interface: float32 x, float32 y -> bool success
+from my_command.srv import Nav2 
 import time
 
 class Nav2ServiceServer(Node):
     def __init__(self):
         super().__init__('nav2_service_node')
         
+        # ใช้ ReentrantCallbackGroup เพื่อให้ Service และ Feedback ทำงานขนานกันได้
         self.group = ReentrantCallbackGroup()
 
-        # --- [ Initialize Nav2 Navigator ] ---
+        # --- [ Initialize Nav2 BasicNavigator ] ---
         self.get_logger().info('⏳ Initializing Nav2 BasicNavigator...')
         self.nav = BasicNavigator()
+
+        # 1. บังคับให้ Nav2 Nodes เป็น Active (สำคัญมาก)
+        self.get_logger().info('🔧 Activating Nav2 Lifecycle Nodes...')
+        self.nav.lifecycleStartup() 
         
-        # 🚩 แก้ไขตรงนี้: สั่งให้รอแบบไม่ต้องเช็ค AMCL (ใช้ bt_navigator แทน)
-        # หรือใช้ self.nav.waitUntilNav2Active(localizer='bt_navigator')
+        # 2. รอจนกว่าระบบจะพร้อม (ใช้ bt_navigator สำหรับ RTAB-Map)
         self.nav.waitUntilNav2Active(localizer='bt_navigator')
         
-        self.get_logger().info('✅ Nav2 Lifecycle Nodes are Active.')
-        # --- [ Service Server ] ---
+        self.get_logger().info('✅ Nav2 Stack is fully Active and Ready.')
+
+        # --- [ Create Service Server ] ---
         self.srv = self.create_service(
             Nav2, 
             'nav2_service', 
@@ -31,67 +36,60 @@ class Nav2ServiceServer(Node):
             callback_group=self.group
         )
 
-        self.get_logger().info('🚀 Nav2 Service Server is Ready.')
+        self.get_logger().info('🚀 Nav2 Service Server is online.')
 
     def handle_nav2_request(self, request, response):
-        # เก็บค่าจาก request เข้าตัวแปร (Logger จะโชว์ตรงนี้)
-        target_x = float(request.x)
-        target_y = float(request.y)
+            try:
+                self.get_logger().info(f"📥 Received Target: X={request.x}, Y={request.y}")
+                
+                # เคลียร์ Task เก่าทิ้งก่อน
+                if not self.nav.isTaskComplete():
+                    self.nav.cancelTask()
 
-        # --- [ ส่วนที่แสดงผล req.x และ req.y ] ---
-        self.get_logger().info("-" * 30)
-        self.get_logger().info(f"📥 New Nav2 Request Received:")
-        self.get_logger().info(f"📍 Target X: {target_x:.2f}")
-        self.get_logger().info(f"📍 Target Y: {target_y:.2f}")
-        self.get_logger().info("-" * 30)
+                goal_pose = PoseStamped()
+                goal_pose.header.frame_id = 'map'
+                goal_pose.header.stamp = self.get_clock().now().to_msg()
+                goal_pose.pose.position.x = float(request.x)
+                goal_pose.pose.position.y = float(request.y)
+                goal_pose.pose.orientation.w = 1.0
 
-        # 1. สร้าง Pose สำหรับเป้าหมาย
-        goal_pose = PoseStamped()
-        goal_pose.header.frame_id = 'map'
-        goal_pose.header.stamp = self.get_clock().now().to_msg()
-        goal_pose.pose.position.x = target_x
-        goal_pose.pose.position.y = target_y
-        goal_pose.pose.orientation.w = 1.0 
+                # สั่งเดินทันที (GoToPose จะหา Path เองโดยอัตโนมัติ)
+                self.nav.goToPose(goal_pose)
 
-        # 2. สั่ง Nav2 ให้เริ่มเดิน
-        self.get_logger().info("🗺️ Sending Goal to Nav2 Stack and Waiting for Plan...")
-        self.nav.goToPose(goal_pose)
+                # เช็คสถานะการเดิน
+                while not self.nav.isTaskComplete():
+                    # ตรวจสอบว่า Nav2 ยังมีชีวิตอยู่ไหมในขณะเดิน
+                    if not self.nav.isNav2Active():
+                        self.get_logger().error("💀 Nav2 Stack went Offline!")
+                        break
+                    
+                    feedback = self.nav.getFeedback()
+                    if feedback:
+                        self.get_logger().info(f'🛰️ Distance: {feedback.distance_remaining:.2f} m', throttle_duration_sec=2.0)
+                    
+                    time.sleep(0.5) # พักบ้างเพื่อลดภาระ CPU
 
-        # 3. วนลูปติดตามสถานะ
-        while not self.nav.isTaskComplete():
-            feedback = self.nav.getFeedback()
-            if feedback:
-                # แสดงระยะที่เหลือ และค่าความเร็ว (ถ้าต้องการ)
-                self.get_logger().info(
-                    f'🛰️ Distance to goal: {feedback.distance_remaining:.2f} m | '
-                    f'Time elapsed: {feedback.navigation_time.sec} s', 
-                    throttle_duration_sec=2.0
-                )
-            time.sleep(0.1)
+                result = self.nav.getResult()
+                response.success = (result == TaskResult.SUCCEEDED)
+                return response
 
-        # 4. ตรวจสอบผลลัพธ์
-        result = self.nav.getResult()
-        if result == TaskResult.SUCCEEDED:
-            self.get_logger().info('🏁 SUCCESS: Robot reached the goal!')
-            response.success = True
-        else:
-            self.get_logger().error(f'❌ FAILED: Navigation ended with result code: {result}')
-            response.success = False
-
-        return response
+            except Exception as e:
+                self.get_logger().error(f"❌ Crash Avoided: {e}")
+                response.success = False
+                return response
 
 def main(args=None):
     rclpy.init(args=args)
     node = Nav2ServiceServer()
     
-    # ใช้ MultiThreadedExecutor เพื่อให้ Callback ของ Feedback และ Service ทำงานร่วมกันได้
+    # ใช้ MultiThreadedExecutor เพื่อรองรับ Service และ Callback ที่ซ้อนกัน
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     
     try:
         executor.spin()
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info('Shutting down Nav2 Service Node...')
     finally:
         node.destroy_node()
         rclpy.shutdown()

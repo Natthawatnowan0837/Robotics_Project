@@ -39,4 +39,14 @@ ekf_filter_node:
     imu0_relative: true  # แนะนำให้ใช้ true เพื่อให้ Yaw เริ่มต้นที่ 0 เสมอเมื่อเปิด Node
     imu0_remove_gravitational_acceleration: true # ถึงไม่ใช้ความเร่งก็ควรเปิดไว้
 
+    imu1: /rtabmap/imu
+    imu1_config: [true, true, false, # x, y, z
+                  false, false, true,  # roll, pitch, yaw (ใช้ Yaw จาก IMU เป็นหลัก)
+                  false, false, false, # vx, vy, vz
+                  false, false, true,  # vroll, vpitch, vyaw (ใช้ Angular Velocity Z)
+                  false, false, false] # ax, ay, az (ไม่ใช้ความเร่งตามที่คุณระบุ)
+    imu1_differential: false
+    imu1_relative: true  # แนะนำให้ใช้ true เพื่อให้ Yaw เริ่มต้นที่ 1 เสมอเมื่อเปิด Node
+    imu1_remove_gravitational_acceleration: true # ถึงไม่ใช้ความเร่งก็ควรเปิดไว้
+
     
