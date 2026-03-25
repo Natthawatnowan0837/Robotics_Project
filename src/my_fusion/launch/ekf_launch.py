@@ -9,12 +9,13 @@ def generate_launch_description():
     ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
 
     return LaunchDescription([
-        # รันโหนด EKF
+        # รันโหนด EKF        
         Node(
             package='robot_localization',
             executable='ekf_node',
             name='ekf_filter_node',
             output='screen',
-            parameters=[ekf_config_path]
+            parameters=[ekf_config_path],
+            remappings=[('/odometry/filtered', '/odom/filtered')]
         ),
     ])

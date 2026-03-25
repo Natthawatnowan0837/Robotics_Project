@@ -31,8 +31,8 @@ amcl:
     sigma_hit: 0.2
     tf_broadcast: true
     transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.1
+    update_min_a: 0.05
+    update_min_d: 0.05
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
@@ -124,12 +124,12 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       
-      max_vel_x: 0.3          # ความเร็วสูงสุดที่เราต้องการ
-      max_speed_xy: 0.3
-      max_vel_theta: 0.45       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
+      max_vel_x: 0.4          # ความเร็วสูงสุดที่เราต้องการ
+      max_speed_xy: 0.4
+      max_vel_theta: 0.4      # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
       min_vel_x: 0.0
       min_speed_xy: 0.0
-      min_speed_theta: 0.3     
+      min_speed_theta: 0.1     
       
       # ความเร่งใน DWB ควรจะ "น้อยกว่า" หรือ "เท่ากับ" Smoother
       acc_lim_x: 0.5           # ออกตัวนิ่มๆ (ลดจาก 1.0)
@@ -259,8 +259,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.3, 0.0, 0.5] 
-    min_velocity: [-0.3, 0.0, -0.5] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
+    max_velocity: [0.4, 0.0, 0.4] 
+    min_velocity: [-0.4, 0.0, -0.4] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
     
     # ค่าความเร่งที่ยอมให้เกิดขึ้น (ควรมาก5ว่า DWB ประมาณ 20-50%)
     # เพื่อให้ Smoother ไม่ไปหน่วงการตัดสิน5จของ Planner จนเกินไป

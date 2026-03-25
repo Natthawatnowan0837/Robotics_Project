@@ -7,44 +7,20 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 def generate_launch_description():
-    # 1. กำหนดชื่อ Package
-    package_name = 'my_manager'
-    control_package = 'my_control'
+    # เปลี่ยนเป็น my_manager ให้ตรงกับที่ใช้รันจริง
+    package_name = 'my_manager' 
 
-    # 2. ตั้งค่า Path ภายนอก (ดึงจาก Home โดยตรง)
-    # ใช้ os.path.expanduser('~') เพื่อให้ชี้ไปที่ /home/<username> อัตโนมัติ
-    home_dir = os.path.expanduser('~')
+    apriltag_config = os.path.join(
+        get_package_share_directory(package_name),
+        'config',
+        'apriltag.yaml'
+    )
     
-    # แก้ไข Path ตรงนี้ให้ตรงกับที่อยู่ไฟล์ .db จริงของคุณ
-    # ตัวอย่าง: /home/noone/Robotics_Project/src/my_manager/maps/
-    maps_base_path = os.path.join(home_dir, 'Robotics_Project', 'src', 'my_manager', 'maps')
-
-    # Path สำหรับ RViz Config (ดึงจาก share ปกติ)
     rviz_config_path = os.path.join(
         get_package_share_directory(package_name),
         'rviz',
         'localized.rviz'
     )
-
-    # --- 3. จัดการ Arguments ---
-    floor_arg = DeclareLaunchArgument(
-        'floor',
-        default_value='floor2',
-        description='ชื่อโฟลเดอร์ชั้น (เช่น floor1, floor2)'
-    )
-
-    db_name_arg = DeclareLaunchArgument(
-        'db_name',
-        default_value='back',
-        description='ชื่อไฟล์ database (เช่น go, back) โดยไม่ต้องใส่ .db'
-    )
-
-    # --- 4. สร้าง Dynamic Path สำหรับ Database ---
-    # เชื่อมต่อ path: maps_base_path / floor / db_name.db
-    database_full_path = PythonExpression([
-        f"'{maps_base_path}/' + '", LaunchConfiguration('floor'), "/' + '", 
-        LaunchConfiguration('db_name'), ".db'"
-    ])
 
     imu_filter = Node(
         package='imu_filter_madgwick',
@@ -60,34 +36,68 @@ def generate_launch_description():
             ('/imu/data', '/rtabmap/imu')
         ]
     )
-    # --- 5. ตั้งค่า Nodes ต่างๆ ---
 
-    # Realsense Camera
+    # --- 1. Arguments สำหรับเลือก Floor และชื่อไฟล์ ---
+    floor_arg = DeclareLaunchArgument(
+        'floor', default_value='floor1',
+        description='ชื่อโฟลเดอร์ชั้น'
+    )
+    db_name_arg = DeclareLaunchArgument(
+        'db_name', default_value='go',
+        description='ชื่อไฟล์ db (ไม่ต้องใส่ .db)'
+    )
+
+    # FIXED: Corrected indentation here
+    home_directory = os.path.expanduser('~')
+    src_maps_path = os.path.join(
+        home_directory, 
+        'Robotics_Project/src/my_manager/maps'
+    )
+
+    # FIXED: Corrected indentation here
+    # สร้าง Path แบบ Dynamic ไปที่ src
+    database_full_path = PythonExpression([
+        f"'{src_maps_path}/' + '", LaunchConfiguration('floor'), 
+        f"/' + '", LaunchConfiguration('db_name'), ".db'"
+    ])
+
+    # --- 2. Nodes ต่างๆ ---
     realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
         )]),
         launch_arguments={
+            'depth_module.profile': '640,480,15',
+            'rgb_module.profile': '640,480,15',
             'pointcloud.enable': 'true',
             'align_depth.enable': 'true',
             'enable_gyro': 'true',
             'enable_accel': 'true',
-            'unite_imu_method': '1',
+            'unite_imu_method': '2',
             'enable_sync': 'true',
             'initial_reset': 'true',
-            'depth_module.depth_visualization': 'true',
         }.items()
     )
 
-    # Robot State Publisher
+    apriltag_node = Node(
+        package='apriltag_ros',
+        executable='apriltag_node',
+        name='apriltag_node',
+        parameters=[apriltag_config],
+        remappings=[
+            ('image_rect', '/camera/camera/color/image_raw'),
+            ('camera_info', '/camera/camera/color/camera_info'),
+            ('detections', '/detections')
+        ]
+    )
+
     rsp = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory(control_package), 'launch', 'rsp.launch.py'
+            get_package_share_directory('my_control'), 'launch', 'rsp.launch.py'
         )]),
         launch_arguments={'use_sim_time': 'false'}.items()
     )
     
-    # Joint State Publisher
     node_joint_state_publisher = Node(
         package='joint_state_publisher',
         executable='joint_state_publisher',
@@ -95,51 +105,56 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}]
     )
 
-    # --- 6. RTAB-Map Localization ---
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
-            'database_path': database_full_path,  # ใช้ Path ที่เราสร้างขึ้นใหม่
-            'localization': 'true',               # โหมดหาตำแหน่ง (ไม่สร้าง Map ใหม่)
-            'rtabmap_args': (
-                '--Mem/IncrementalMemory false '  # สำคัญมากสำหรับ Localization
-                '--Mem/InitMemoryWMS true ' 
-                '--Rtabmap/DetectionRate 0.8 '       
-                '--Kp/MaxFeatures 800 '              
-                '--RGBD/ProximityBySpace false '     
-                '--RGBD/LoopClosureRecheck true '    
-                '--RGBD/NeighborLinkRefining true '
-                '--Vis/MinInliers 15 '               
-                '--RGBD/AngularUpdate 0.1 '          
-                '--RGBD/LinearUpdate 0.1'            
+            'database_path': database_full_path,
+            'localization': 'true',                 # [แก้ไข] ต้องเป็น true เพื่อโหลด Map เก่า
+            'args': (
+                # '--delete_db_on_start '           # [แก้ไข] ลบออก ห้ามลบ DB ทิ้งตอน Localize
+                '--Mem/IncrementalMemory false '    # [แก้ไข] เป็น false เพื่อไม่ให้เขียน Map ทับ (นิ่งกว่า)
+                '--RGBD/NeighborLinkRefining true ' 
+                '--Vis/MinInliers 20 '              # เพิ่มความเข้มงวดของจุดฟีเจอร์
+                '--RGBD/TagHasConstantSize true '
+                '--Landmarks/FromTags true '
+                '--RGBD/OptimizeMaxError 2.0 '      # [แก้ไข] ลดเหลือ 2.0 เพื่อคุมไม่ให้หุ่นวาร์ปแรงเกินไป
+                '--Rtabmap/DetectionRate 2 '        # เพิ่มเป็น 2Hz เพื่อให้ Update ตำแหน่งถี่ขึ้นในโหมดใช้งานจริง
             ),
+            'approx_sync': 'true',
+            'approx_sync_max_interval': '0.05',
+            'frame_id': 'base_link',
+            
+            # Topics
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
-            'frame_id': 'base_link',
-            'visual_odometry': 'false',           
+            'tag_topic': '/detections',
+            
+            # Sensor Fusion Settings
             'odom_topic': '/odometry/filtered',   
-            'imu_topic': '/imu/data_standard',   
-            'publish_tf_odom': 'false',           
-            'vo_frame_id': 'odom',
-            'approx_sync': 'true', 
-            'wait_imu_to_init': 'false',          
+            'imu_topic': '/imu/data_standard',
+            'wait_imu_to_init': 'true',
+            ฉ
+            # Tag Variance (แก้ปัญหา Warp)
+            'tag_linear_variance': '0.3',           # เชื่อ Odom มากขึ้น ลดความแรงของการกระโดดเมื่อเจอ Tag
+            'tag_angular_variance': '0.3',          # คุมมุมหมุนให้ไม่เหวี่ยง
+            
             'qos': '1',
             'rviz': 'true',
-            'rviz_cfg': rviz_config_path 
+            'rviz_cfg': rviz_config_path,
         }.items()
     )
 
-    # --- 7. รวม Launch ทั้งหมด ---
+
     return LaunchDescription([
         floor_arg,
         db_name_arg,
+        imu_filter,
         realsense,
+        apriltag_node,
         rsp,
         node_joint_state_publisher,
-        imu_filter,
-        # หน่วงเวลา rtabmap 3 วินาที เพื่อให้ Sensor และ TF พร้อมก่อน
         TimerAction(period=3.0, actions=[rtabmap]),
     ])

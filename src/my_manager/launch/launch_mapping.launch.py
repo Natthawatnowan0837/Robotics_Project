@@ -10,6 +10,12 @@ def generate_launch_description():
     # เปลี่ยนเป็น my_manager ให้ตรงกับที่ใช้รันจริง
     package_name = 'my_manager' 
 
+    apriltag_config = os.path.join(
+        get_package_share_directory(package_name),
+        'config',
+        'apriltag.yaml'
+    )
+    
     rviz_config_path = os.path.join(
         get_package_share_directory(package_name),
         'rviz',
@@ -61,15 +67,28 @@ def generate_launch_description():
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
         )]),
         launch_arguments={
+            'depth_module.profile': '640,480,15',
+            'rgb_module.profile': '640,480,15',
             'pointcloud.enable': 'true',
             'align_depth.enable': 'true',
             'enable_gyro': 'true',
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'initial_reset': 'true', 
-            'depth_module.depth_visualization': 'true',
+            'initial_reset': 'true',
         }.items()
+    )
+
+    apriltag_node = Node(
+        package='apriltag_ros',
+        executable='apriltag_node',
+        name='apriltag_node',
+        parameters=[apriltag_config],
+        remappings=[
+            ('image_rect', '/camera/camera/color/image_raw'),
+            ('camera_info', '/camera/camera/color/camera_info'),
+            ('detections', '/detections')
+        ]
     )
 
     rsp = IncludeLaunchDescription(
@@ -86,44 +105,48 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}]
     )
 
-    # --- 3. RTAB-Map Localization ---
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
         )]),
         launch_arguments={
             'database_path': database_full_path,
-            'localization': 'false', 
-            'args': '--delete_db_on_start', 
-            'rtabmap_args': (
-                '--RGBD/NeighborLinkRefining false ' # ปิดการใช้ IMU ช่วยขัดเกลาลิงก์
-                '--Vis/MinInliers 20 '               # ค่า Default มาตรฐาน (มักจะอยู่ที่ 20)
-                '--Mem/IncrementalMemory true'
+            'localization': 'false',
+            'args': (
+                '--delete_db_on_start '
+                '--Mem/IncrementalMemory true '
+                '--RGBD/NeighborLinkRefining true '
+                '--Vis/MinInliers 20'
+                '--RGBD/TagHasConstantSize true '
+                '--Landmarks/FromTags true '
+                '--RGBD/OptimizeMaxError 3.0 '
+                '--Rtabmap/DetectionRate 1 '
             ),
             'approx_sync': 'true',
+            'approx_sync_max_interval': '0.05',
             'frame_id': 'base_link',
-            # --- กล้อง ---
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
-            
-            # --- ส่วนที่แก้ไข: ตัด Fusion ออก ---
+            'tag_topic': '/detections',
+            'tag_linear_variance': '0.3',  # เพิ่มจาก 0.1 เป็น 0.5 เพื่อให้มันค่อยๆ ปรับตำแหน่ง ไม่กระโดดพรวดเดียว
+            'tag_angular_variance': '0.3',            
             'odom_topic': '/odometry/filtered',   
-            'imu_topic': '/imu/data_standard',           # กลับไปใช้ Odom หลัก (ไม่ใช่ตัว filtered)
-            'subscribe_scan': 'false',           # ถ้าไม่ได้ใช้ Lidar ให้มั่นใจว่าเป็น false
-            'wait_imu_to_init': 'false',         # ไม่ต้องรอ IMU
-            # --- การตั้งค่าอื่นๆ ---
+            'imu_topic': '/imu/data_standard',
+            'wait_imu_to_init': 'true',
             'qos': '1',
             'rviz': 'true',
             'rviz_cfg': rviz_config_path,
         }.items()
     )
 
+
     return LaunchDescription([
         floor_arg,
         db_name_arg,
         imu_filter,
         realsense,
+        apriltag_node,
         rsp,
         node_joint_state_publisher,
         TimerAction(period=3.0, actions=[rtabmap]),

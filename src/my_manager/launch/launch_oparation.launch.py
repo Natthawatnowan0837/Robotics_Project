@@ -62,7 +62,7 @@ def generate_launch_description():
 
     rotation_control = Node(
         package='my_manager',
-        executable='rotation_controle',
+        executable='rotation_control',
         name='rotation_control_node',
         output='screen'
     )

@@ -18,8 +18,8 @@ class MoveSequenceNode(Node):
         self.group = ReentrantCallbackGroup()
 
         # Parameters
-        self.declare_parameter('linear_speed', 0.35)
-        self.declare_parameter('angular_speed', 0.65)
+        self.declare_parameter('linear_speed', 0.3)
+        self.declare_parameter('angular_speed', 0.6)
         self.declare_parameter('move_duration', 1.0)
         
         self.lin_vel = self.get_parameter('linear_speed').value

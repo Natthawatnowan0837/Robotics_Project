@@ -62,7 +62,7 @@ class MotorToOdom(Node):
 
         # --- 4. Publish Odometry Message ---
         odom = Odometry()
-        odom.header.stamp = t.header.stamp
+        odom.header.stamp = self.get_clock().now().to_msg() # ใช้เวลาปัจจุบัน
         odom.header.frame_id = 'odom'
         odom.child_frame_id = 'base_link'
 
@@ -70,10 +70,27 @@ class MotorToOdom(Node):
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation = q
+        
+        # เพิ่ม Pose Covariance (ความเชื่อมั่นในตำแหน่ง X, Y, Yaw)
+        # [x, y, z, roll, pitch, yaw] -> Matrix 6x6 (36 elements)
+        odom.pose.covariance = [0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                                0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                                0.0,  0.0,  999.0, 0.0,  0.0,  0.0, # Z ไม่ใช้
+                                0.0,  0.0,  0.0,  999.0, 0.0,  0.0, # Roll ไม่ใช้
+                                0.0,  0.0,  0.0,  0.0,  999.0, 0.0, # Pitch ไม่ใช้
+                                0.0,  0.0,  0.0,  0.0,  0.0,  0.05] # Yaw
 
         # ความเร็ว (Twist)
         odom.twist.twist.linear.x = v_linear
         odom.twist.twist.angular.z = v_angular
+        
+        # เพิ่ม Twist Covariance (ความเชื่อมั่นในความเร็ว vx, vyaw)
+        odom.twist.covariance = [0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                                 0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                                 0.0,  0.0,  999.0, 0.0,  0.0,  0.0,
+                                 0.0,  0.0,  0.0,  999.0, 0.0,  0.0,
+                                 0.0,  0.0,  0.0,  0.0,  999.0, 0.0,
+                                 0.0,  0.0,  0.0,  0.0,  0.0,  0.05]
 
         self.odom_pub.publish(odom)
 

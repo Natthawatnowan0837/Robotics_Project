@@ -12,13 +12,15 @@ def generate_launch_description():
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
         )]),
         launch_arguments={
+            'depth_module.profile': '640,480,15',
+            'rgb_module.profile': '640,480,15',
+            'pointcloud.enable': 'true',
+            'align_depth.enable': 'true',
             'enable_gyro': 'true',
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'align_depth.enable': 'true',
-            'depth_module.profile': '640x480x15', # ลดความละเอียดและ FPS (มาตรฐานคือ 30fps ซึ่งหนักไป)
-            'rgb_camera.profile': '640x480x15', 
+            'initial_reset': 'true',
         }.items()
     )
 

@@ -1,52 +1,39 @@
-### ekf.yaml ###
 ekf_filter_node:
   ros__parameters:
-    # 1. การตั้งค่าพื้นฐาน
-    frequency: 20.0
+    frequency: 30.0
     sensor_timeout: 0.1
-    two_d_mode: true  # หุ่นยนต์วิ่งบนพื้นราบ (Z, Roll, Pitch จะถูกบังคับเป็น 0)
-    transform_time_offset: 0.0
-    transform_timeout: 0.0
-    print_diagnostics: true
-    debug: false
+    two_d_mode: true
+    publish_tf: true
 
-    # 2. Frame Setup
-    map_frame: map              # แฟรมแผนที่ (ถ้ามี)
-    odom_frame: odom            # แฟรมโลก (World Frame)
-    base_link_frame: base_link  # แฟรมตัวหุ่นยนต์
-    world_frame: odom           # EKF จะคำนวณตำแหน่งในแฟรม odom
+    map_frame: map              # สำหรับอนาคตที่มี AprilTag/SLAM
+    odom_frame: odom            # เฟรมหลักของการทำ Fusion
+    base_link_frame: base_footprint # ตัวหุ่นยนต์
+    world_frame: odom           # ในขั้นตอนนี้ให้ Localize ในเฟรม odom
 
-    # 3. ข้อมูลจาก ENCODER (Odometry)
-    # รับจาก Topic /odom ที่คุณสร้างจากโค้ด Encoder
+    # 1. ข้อมูลจาก Encoder (Wheel Odometry)
     odom0: /odom
-    odom0_config: [true,  true,  false, # x, y, z (ใช้ตำแหน่ง X, Y)
-                   false, false, false, # roll, pitch, yaw (ไม่ใช้มุมจากล้อ)
-                   true,  false, false, # vx, vy, vz (ใช้ความเร็ว v_linear)
-                   false, false, false,  # vroll, vpitch, vyaw (ใช้ v_angular)
-                   false, false, false] # ax, ay, az
-    odom0_differential: false
+    odom0_config: [true,  true,  false, # x, y, z
+                   false, false, false, # roll, pitch, yaw
+                   true,  false, false, # vx, vy, vz
+                   false, false, true,  # vroll, vpitch, vyaw (ใช้ Angular Z)
+                   false, false, false]
     odom0_relative: false
 
-    # 4. ข้อมูลจาก IMU (RPY เท่านั้น)
-    # รับจาก Topic /imu/data_standard ที่คุณสร้างจากโค้ด IMU
+    # 2. ข้อมูลจาก Realsense (Visual Odometry)
+    odom1: /visual_odom
+    odom1_config: [true,  true,  false,
+                   false, false, false,
+                   true,  true,  false, # vx, vy
+                   false, false, false,
+                   false, false, false]
+    odom1_relative: true
+
+    # 3. ข้อมูลจาก MPU6050 (IMU)
     imu0: /imu/data_standard
-    imu0_config: [false, false, false, # x, y, z
-                  false, false, true,  # roll, pitch, yaw (ใช้ Yaw จาก IMU เป็นหลัก)
-                  false, false, false, # vx, vy, vz
-                  false, false, true,  # vroll, vpitch, vyaw (ใช้ Angular Velocity Z)
-                  false, false, false] # ax, ay, az (ไม่ใช้ความเร่งตามที่คุณระบุ)
-    imu0_differential: false
-    imu0_relative: true  # แนะนำให้ใช้ true เพื่อให้ Yaw เริ่มต้นที่ 0 เสมอเมื่อเปิด Node
-    imu0_remove_gravitational_acceleration: true # ถึงไม่ใช้ความเร่งก็ควรเปิดไว้
-
-    imu1: /rtabmap/imu
-    imu1_config: [true, true, false, # x, y, z
-                  false, false, true,  # roll, pitch, yaw (ใช้ Yaw จาก IMU เป็นหลัก)
-                  false, false, false, # vx, vy, vz
-                  false, false, true,  # vroll, vpitch, vyaw (ใช้ Angular Velocity Z)
-                  false, false, false] # ax, ay, az (ไม่ใช้ความเร่งตามที่คุณระบุ)
-    imu1_differential: false
-    imu1_relative: true  # แนะนำให้ใช้ true เพื่อให้ Yaw เริ่มต้นที่ 1 เสมอเมื่อเปิด Node
-    imu1_remove_gravitational_acceleration: true # ถึงไม่ใช้ความเร่งก็ควรเปิดไว้
-
-    
+    imu0_config: [false, false, false,
+                  false, false, true,   # ใช้ Yaw (Orientation)
+                  false, false, false,
+                  false, false, true,   # ใช้ Angular Velocity Z
+                  false, false, false]
+    imu0_relative: true
+    imu0_remove_gravitational_acceleration: true
