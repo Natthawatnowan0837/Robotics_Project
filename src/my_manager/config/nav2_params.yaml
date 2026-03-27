@@ -126,7 +126,7 @@ controller_server:
       
       max_vel_x: 0.3          # ความเร็วสูงสุดที่เราต้องการ
       max_speed_xy: 0.3
-      max_vel_theta: 0.45       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
+      max_vel_theta: 0.3       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
       min_vel_x: 0.0
       min_speed_xy: 0.0
       min_speed_theta: 0.3     
@@ -259,8 +259,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.3, 0.0, 0.5] 
-    min_velocity: [-0.3, 0.0, -0.5] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
+    max_velocity: [0.3, 0.0, 0.3] 
+    min_velocity: [-0.3, 0.0, -0.3] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
     
     # ค่าความเร่งที่ยอมให้เกิดขึ้น (ควรมาก5ว่า DWB ประมาณ 20-50%)
     # เพื่อให้ Smoother ไม่ไปหน่วงการตัดสิน5จของ Planner จนเกินไป

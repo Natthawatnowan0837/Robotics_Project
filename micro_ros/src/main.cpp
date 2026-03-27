@@ -139,7 +139,7 @@ void arm_vel_callback(const void * msgin) {
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
   if (timer != NULL) {
     // pid_drive(linear_control,angular_control,motorDrive_L,motorDrive_R);
-    pid_drive(current_linear_x*2.0,current_angular_z*2.0,motorDrive_L,motorDrive_R);
+    pid_drive(current_linear_x*2.5,current_angular_z*2.5,motorDrive_L,motorDrive_R);
     pid_plateform(anglePlatformY,hall_effect);
     pid_arm(linear_arm, motorArm_L,motorArm_R);
     // pwm_arm(linear_arm);

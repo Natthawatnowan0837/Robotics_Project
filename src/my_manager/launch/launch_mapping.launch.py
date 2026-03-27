@@ -63,41 +63,41 @@ def generate_launch_description():
     #     ]
     # )
 
-    # --- 3. RTAB-Map (Mapping Mode) ---
+        # --- 3. RTAB-Map (Mapping Mode) ---
     rtabmap = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
-        )]),
-        launch_arguments={
-            'database_path': database_full_path,
-            'localization': 'false',
-            'args': (
-                '--delete_db_on_start '
-                '--Mem/IncrementalMemory true '
-                '--RGBD/NeighborLinkRefining true '
-                '--Vis/MinInliers 15 '
-                # '--RGBD/TagHasConstantSize true '
-                # '--Landmarks/FromTags true '
-                '--RGBD/OptimizeMaxError 10.0 '
-                '--Rtabmap/DetectionRate 1 '
-            ),
-            'approx_sync': 'true',
-            'approx_sync_max_interval': '0.05',
-            'frame_id': 'base_footprint',
-            'rgb_topic': '/camera/camera/color/image_raw',
-            'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
-            'camera_info_topic': '/camera/camera/color/camera_info',
-            'tag_topic': '/detections',            
-            'odom_topic': '/odometry/filtered',   
-            'imu_topic': '/imu/data_standard',
-            'odom_frame_id': 'odom',
-            'publish_tf_map': 'true',
-            'wait_imu_to_init': 'true',
-            'qos': '1',
-            'rviz': 'true',
-            'rviz_cfg': rviz_config_path,
-        }.items()
-    )
+            PythonLaunchDescriptionSource([os.path.join(
+                get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
+            )]),
+            launch_arguments={
+                'database_path': database_full_path,
+                'localization': 'false',
+                'args': (
+                    '--delete_db_on_start '
+                    '--Mem/IncrementalMemory true '
+                    '--RGBD/NeighborLinkRefining true '
+                    '--Vis/MinInliers 15 '
+                    '--RGBD/OptimizeMaxError 10.0 '
+                    '--Rtabmap/DetectionRate 1 '
+                ),
+                'approx_sync': 'true',
+                'approx_sync_max_interval': '0.05',
+                # แก้ไขที่ 1: ใช้ base_footprint เป็นหลัก (เพราะเป็น Root ของหุ่นยนต์ใน URDF คุณ)
+                'frame_id': 'base_footprint', 
+                'rgb_topic': '/camera/camera/color/image_raw',
+                'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
+                'camera_info_topic': '/camera/camera/color/camera_info',
+                'tag_topic': '/detections',            
+                'odom_topic': '/odometry/filtered',   
+                'imu_topic': '/imu/data_standard',
+                # แก้ไขที่ 2: ตรวจสอบว่า EKF ของคุณใช้ชื่อ frame อะไร (ปกติคือ odom หรือ odometry/filtered)
+                'odom_frame_id': 'odom', 
+                'publish_tf_map': 'true',
+                'wait_imu_to_init': 'false',
+                'qos': '1',
+                'rviz': 'true',
+                'rviz_cfg': rviz_config_path,
+            }.items()
+        )
 
     return LaunchDescription([
         floor_arg,

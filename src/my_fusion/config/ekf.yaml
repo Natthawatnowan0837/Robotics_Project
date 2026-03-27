@@ -28,12 +28,14 @@ ekf_filter_node:
                    false, false, false]
     odom1_relative: true
 
-    # 3. ข้อมูลจาก MPU6050 (IMU)
     imu0: /imu/data_standard
-    imu0_config: [false, false, false,
-                  false, false, true,   # ใช้ Yaw (Orientation)
-                  false, false, false,
-                  false, false, true,   # ใช้ Angular Velocity Z
-                  false, false, false]
+    imu0_config: [false, false, false, # Position: x, y, z
+                  true,  true,  true,  # Orientation: roll, pitch, yaw (ใช้เฉพาะส่วนนี้)
+                  false, false, false, # Velocity: vx, vy, vz
+                  false, false, false, # Angular Velocity: ปิดไว้เพื่อลดความสับสนของ Filter
+                  false, false, false] # Acceleration: ปิดเพราะใน Topic ของคุณเป็น 0.0
+    
     imu0_relative: true
-    imu0_remove_gravitational_acceleration: true
+    
+    # สำคัญ: เปลี่ยนเป็น false เพราะ linear_acceleration ใน topic ของคุณไม่มีข้อมูล (เป็น 0)
+    imu0_remove_gravitational_acceleration: false
