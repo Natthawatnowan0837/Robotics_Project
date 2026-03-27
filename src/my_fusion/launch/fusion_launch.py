@@ -8,6 +8,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     package_name = 'my_fusion'
 
+    # 1. โหนดจัดการการเชื่อมต่อ ESP32
     esp32_manager_node = Node(
         package='my_manager',
         executable='esp32_manager',
@@ -15,7 +16,7 @@ def generate_launch_description():
         output='screen'
     )
 
-
+    # 2. โหนดแปลงค่า Encoder เป็น Odometry
     encoders_node = Node(
         package=package_name,
         executable='encoder_to_odom',
@@ -23,7 +24,7 @@ def generate_launch_description():
         output='screen'
     )
     
-    # 2. โหนดรับค่า IMU จาก ESP32
+    # 3. โหนดรับค่า IMU จาก ESP32
     imu_node = Node(
         package=package_name,
         executable='imu_bridge',
@@ -31,6 +32,7 @@ def generate_launch_description():
         output='screen'
     )
 
+    # 4. ดึง EKF Launch (Extended Kalman Filter)
     ekf_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory(package_name), 'launch', 'ekf_launch.py'
@@ -38,6 +40,7 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'false'}.items()
     )
 
+    # 5. ดึง Odom Launch
     odom_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory(package_name), 'launch', 'odom_launch.py'
@@ -45,26 +48,20 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'false'}.items()
     )
 
-    # odometry_test_node = Node(
-    #     package=package_name,
-    #     executable='odometry_filtered', # ตรวจสอบชื่อ executable ใน setup.py ให้ดี (ห้ามมีช่องว่างท้ายชื่อ)
-    #     name='odometry_filtered_test',
-    #     output='screen'
-    # )
-    # pid_node = Node(
-    #     package='my_control',
-    #     executable='pid_parameters',
-    #     name='pid_node',
-    #     output='screen'
-    # )
+    # 6. โหนดควบคุม PID
+    pid_node = Node(
+        package='my_control',
+        executable='pid_parameters',
+        name='pid_node',
+        output='screen'
+    )
 
     # --- ส่งโหนดทั้งหมดออกไปรัน ---
     return LaunchDescription([
         esp32_manager_node,
         encoders_node,
         imu_node,
-        odom_launch,
-        ekf_launch,
-        # pid_node,
-        # odometry_test_node
+        odom_launch,  # <--- เติมจุลภาคตรงนี้
+        ekf_launch,   # <--- เติมจุลภาคตรงนี้
+        pid_node      # <--- เติมจุลภาคตรงนี้
     ])

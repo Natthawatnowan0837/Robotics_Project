@@ -29,8 +29,8 @@ class PIDManagerNode(Node):
         # ตั้งค่า PID [P, I, D]
         # [Drive_L_P, I, D, Drive_R_P, I, D, Platform_P, I, D, Arm_P, I, D]
         self.pid_values = [
-            30.0, 0.0, 1.0,   # Drive_L (ปรับ Ki ตามที่คุยกันเพื่อให้ถึง 0.3 จริง)
-            31.25, 0.0, 1.0,   # Drive_R
+            30.0, 0.0, 0.0,   # Drive_L (ปรับ Ki ตามที่คุยกันเพื่อให้ถึง 0.3 จริง)
+            31.25, 0.0, 0.0,   # Drive_R
             20.0, 0.0, 0.8,    # Platform
             10.0, 0.5, 1.0     # Arm
         ]

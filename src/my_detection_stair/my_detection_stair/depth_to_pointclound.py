@@ -46,7 +46,7 @@ class DataCollectionNode(Node):
 
         self.depth_sub = self.create_subscription(
             Image,
-            '/camera/camera/depth/image_rect_raw',
+            '/camera/camera/depth/image_rect_raw/compressedDepth',
             self.depth_callback,
             10
         )

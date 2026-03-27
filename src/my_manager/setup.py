@@ -49,7 +49,9 @@ setup(
             'check_localize = my_manager.check_localize:main',
             'check_position = my_manager.check_position:main',
             'open_map = my_manager.open_map:main',
-            'rotation_control = my_manager.rotation_control:main'
+            'rotation_control = my_manager.rotation_control:main',
+            'go_to_stair = my_manager.go_to_stair:main',
+            "controller = my_manager.controller:main",
         ],
     },
 )

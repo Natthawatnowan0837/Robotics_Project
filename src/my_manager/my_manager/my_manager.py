@@ -4,57 +4,74 @@ from std_msgs.msg import String, Float32MultiArray
 from enum import Enum
 import json
 import os
+import subprocess
+import signal
+import time
 
 from ament_index_python.packages import get_package_share_directory
 from my_command.srv import CheckFloor
-from my_command.srv import OpenMap # อย่าลืม import service ตัวใหม่
+from my_command.srv import OpenMap
 from my_command.srv import CheckLocalize
 from my_command.srv import CheckPosition
 from my_command.srv import Nav2
+from my_command.srv import GotoStair
+from my_command.srv import Controller
 
 class RobotState(Enum):
-    IDLE = 0          
-    CHECK_FLOOR = 1  
-    OPEN_MAP = 2      
-    CHECK_LOCALIZE = 3     
-    CHECK_POSITION = 4   
-    NAV2 = 5         
+    IDLE = 0
+    SETUP = 1          
+    CHECK_FLOOR = 2  
+    OPEN_MAP = 3      
+    CHECK_LOCALIZE = 4     
+    CHECK_POSITION = 5   
+    NAV2 = 6         
+    GoToStair = 7
+    Controller = 8
 
 class StateManagerNode(Node):
     def __init__(self):
         super().__init__('state_manager_node')
         
+        # --- Variables ---
         self.current_state = RobotState.IDLE
         self.target_data = None   
         self.target_room_name = ""
         self.rooms_dict = {}
-
-        # ตัวแปรตามที่คุณกำหนด (เปลี่ยนจากตัวเลขเป็นข้อความ)
+        self.floor_status = "same_floor"
+        
         self.mode = ['map', 'localize']
         self.way = ['go', 'back']
-        self.default_way = self.way[1] # 'back'
+        self.default_way = self.way[1] # เริ่มต้นที่ 'back'
+        
         self.goal = [0.0, 0.0]        
-        self.back_goal = [0.0, 0.0]   
         self.floor = 0
         self.update_floor = 0
-        self.update_goal = [0, 0]
+        self.update_goal = [0.0, 0.0]
         
+        self.launch_process = None
         self.service_called = False
+        self.setup_timer = None
 
+        # --- Load Data ---
         self.read_command()
 
+        # --- Publishers & Subscriptions ---
         self.sub_room = self.create_subscription(String, '/room_target', self.room_callback, 10)
-
-        self.cli = self.create_client(CheckFloor, 'check_floor_service')
-        self.cli_open_map = self.create_client(OpenMap, 'open_map_service') # Client ตัวที่สอง
+        self.pub_current_state = self.create_publisher(String, '/robot_current_state', 10)
+        
+        # --- Service Clients ---
+        self.cli_floor = self.create_client(CheckFloor, 'check_floor_service')
+        self.cli_open_map = self.create_client(OpenMap, 'open_map_service')
         self.cli_localize = self.create_client(CheckLocalize, 'check_localization_service')
         self.cli_pos = self.create_client(CheckPosition, 'check_position_service')
         self.cli_nav2 = self.create_client(Nav2, 'nav2_service')
+        self.cli_stair = self.create_client(GotoStair, 'goto_stair_service')
+        self.cli_controller = self.create_client(Controller, 'controller_service')
         
-        self.pub_final_target = self.create_publisher(Float32MultiArray, 'final_target', 10)
-
-
+        # --- Timers ---
+        self.create_timer(0.5, self.publish_state)
         self.timer = self.create_timer(1.0, self.state_machine_control)
+        
         self.get_logger().info("🤖 State Manager Ready. Waiting for order...")
 
     def read_command(self):
@@ -67,7 +84,12 @@ class StateManagerNode(Node):
             self.get_logger().info(f"📚 Loaded {len(self.rooms_dict)} rooms.")
         except Exception as e:
             self.get_logger().error(f"❌ Failed to read JSON: {e}")
-    
+
+    def publish_state(self):
+        msg = String()
+        msg.data = self.current_state.name
+        self.pub_current_state.publish(msg)
+
     def room_callback(self, msg):
         if self.current_state != RobotState.IDLE:
             self.get_logger().warn("⚠️ Robot is busy!")
@@ -77,24 +99,18 @@ class StateManagerNode(Node):
         if room_key in self.rooms_dict:
             self.target_room_name = room_key
             self.target_data = self.rooms_dict[room_key] 
-            
             self.floor = float(self.target_data.get('floor', 0))
             
-            # 2. ตรวจสอบเงื่อนไข default_way เพื่อเลือกพิกัดเป้าหมายเริ่มต้น
-            if self.default_way == 'go':
-                coords = self.target_data.get('go', [0.0, 0.0])
-            else: # default_way == 'back'
-                coords = self.target_data.get('back', [0.0, 0.0])
-            
+            coords = self.target_data.get(self.default_way, [0.0, 0.0])
             self.goal = [float(coords[0]), float(coords[1])]
 
-            self.get_logger().info(f"🔎 Target: {self.target_room_name} | Way: {self.default_way} | Goal: {self.goal}")
+            self.get_logger().info(f"🔎 Target: {self.target_room_name} | Goal: {self.goal}")
             
-            # รีเซ็ตค่าสำหรับภารกิจใหม่
+            # เริ่มต้นภารกิจใหม่ที่ SETUP เสมอ
             self.update_goal = [0.0, 0.0]
-            self.update_floor = self.floor # เบื้องต้นให้เท่ากับเป้าหมายก่อน
+            self.update_floor = self.floor
             self.service_called = False 
-            self.current_state = RobotState.CHECK_FLOOR
+            self.current_state = RobotState.SETUP
         else:
             self.get_logger().error(f"❌ Room '{room_key}' not found.")
 
@@ -102,274 +118,202 @@ class StateManagerNode(Node):
         if self.current_state == RobotState.IDLE:
             return
 
-        self.get_logger().info(f"🔄 Current State: {self.current_state.name}")
+        self.get_logger().info(f"🔄 State: {self.current_state.name}", throttle_duration_sec=2.0)
 
-        if self.current_state == RobotState.CHECK_FLOOR:
+        # --- STATE: SETUP (Launch ROS2) ---
+        if self.current_state == RobotState.SETUP:
             if not self.service_called:
-                self.call_check_floor_service()
-                self.service_called = True
-            else:
-                self.get_logger().info("⏳ Waiting for floor service response...")
+                self.get_logger().info("🛠️ Launching Fusion System...")
+                self.terminate_launch_file() # Clean start
+                if self.execute_fusion_launch():
+                    self.service_called = True
+                    # รอ 5 วินาทีให้ Sensor/Service พร้อม
+                    self.setup_timer = self.create_timer(5.0, self.finish_setup_callback)
+                else:
+                    self.reset_to_idle()
 
+        # --- STATE: CHECK_FLOOR ---
+        elif self.current_state == RobotState.CHECK_FLOOR:
+            if not self.service_called:
+                self.call_service_async(self.cli_floor, CheckFloor.Request(floor=float(self.floor)), self.floor_response_callback)
+                self.service_called = True
+
+        # --- STATE: OPEN_MAP ---
         elif self.current_state == RobotState.OPEN_MAP:
             if not self.service_called:
-                self.call_open_map_service() # เรียก Service Open Map
+                req = OpenMap.Request(mode=self.mode[1], way=self.default_way, floor=float(self.update_floor))
+                self.call_service_async(self.cli_open_map, req, self.open_map_response_callback)
                 self.service_called = True
 
-            # --- STATE: CHECK_LOCALIZE (แก้ไขใหม่) ---
+        # --- STATE: CHECK_LOCALIZE ---
         elif self.current_state == RobotState.CHECK_LOCALIZE:
             if not self.service_called:
-                self.call_check_localize_service()
+                self.call_service_async(self.cli_localize, CheckLocalize.Request(active=True), self.localize_response_callback)
                 self.service_called = True
-            else:
-                self.get_logger().info("⏳ Waiting for Localization to confirm...")
 
+        # --- STATE: CHECK_POSITION ---
         elif self.current_state == RobotState.CHECK_POSITION:
             if not self.service_called:
-                self.call_check_position_service()
+                target = self.update_goal if self.update_goal != [0.0, 0.0] else self.goal
+                req = CheckPosition.Request(x=float(target[0]), y=float(target[1]), way=self.default_way)
+                self.call_service_async(self.cli_pos, req, self.position_response_callback)
                 self.service_called = True
 
-            # --- STATE: NAV2 ---
-        # --- STATE: NAV2 (จุดหมายสุดท้าย) ---
+        # --- STATE: NAV2 ---
         elif self.current_state == RobotState.NAV2:
-                    if not self.service_called:
-                        # แก้ไขการเช็คเงื่อนไขก่อนเรียก Service
-                        # เช็คว่ามีเป้าหมายไหนที่มีค่าบ้าง (ไม่เป็น [0,0])
-                        current_target = self.update_goal if self.update_goal != [0.0, 0.0] else self.goal
-                        
-                        if current_target == [0.0, 0.0]:
-                            self.get_logger().error("❌ No valid goal found (both are [0, 0]). Moving to IDLE.")
-                            self.current_state = RobotState.IDLE
-                            return
+            if not self.service_called:
+                target = self.update_goal if self.update_goal != [0.0, 0.0] else self.goal
+                if target == [0.0, 0.0]:
+                    self.reset_to_idle()
+                    return
+                self.call_service_async(self.cli_nav2, Nav2.Request(x=float(target[0]), y=float(target[1])), self.nav2_response_callback)
+                self.service_called = True
 
-                        # ถ้ามีพิกัด (เช่น 21.5) ก็ให้เรียกฟังก์ชันทำงานต่อได้เลย
-                        self.call_nav2_service() 
-                        self.service_called = True 
-                    else:
-                        self.get_logger().info("🚢 Robot is navigating...", throttle_duration_sec=5.0)
-                        
-    def call_check_floor_service(self):
-        while not self.cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
-        
-        request = CheckFloor.Request()
-        request.floor = float(self.floor)
-        
-        self.get_logger().info(f"📡 Calling Service for floor: {self.floor}")
-        future = self.cli.call_async(request)
-        future.add_done_callback(self.service_response_callback)
+        # --- STATE: GoToStair ---
+        elif self.current_state == RobotState.GoToStair:
+            if not self.service_called:
+                self.call_service_async(self.cli_stair, GotoStair.Request(active=True), self.stair_response_callback)
+                self.service_called = True
 
-    def service_response_callback(self, future):
+        # --- STATE: Controller ---
+        elif self.current_state == RobotState.Controller:
+            if not self.service_called:
+                self.call_service_async(self.cli_controller, Controller.Request(active=True), self.controller_response_callback)
+                self.service_called = True
+
+    # --- Helper Functions ---
+    def call_service_async(self, client, request, callback):
+        while not client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info(f'Waiting for {client.srv_name}...')
+        future = client.call_async(request)
+        future.add_done_callback(callback)
+
+    def finish_setup_callback(self):
+        self.setup_timer.cancel()
+        self.service_called = False
+        self.current_state = RobotState.CHECK_FLOOR
+        self.get_logger().info("✅ Fusion Ready. Moving to CHECK_FLOOR.")
+
+    # --- Callbacks ---
+    def floor_response_callback(self, future):
         try:
-            response = future.result()
-            self.get_logger().info(f"🏢 Current Floor: {response.current_floor} | Status: {response.status}")
-            
-            if response.status == "same_floor":
-                self.get_logger().info("✅ Floor Match! Moving to next state.")
-                self.update_goal = self.goal 
-                self.update_floor = response.current_floor
-                
-                # --- จุดที่ต้องเพิ่ม ---
-                self.service_called = False # ปลดล็อคเพื่อให้ State ถัดไปเรียก Service ได้
+            res = future.result()
+            self.floor_status = res.status
+            if res.status == "same_floor":
+                self.update_goal = self.goal
+                self.update_floor = res.current_floor
                 self.current_state = RobotState.OPEN_MAP
             else:
-                new_room_key = f"{response.status}_Stair{int(response.current_floor)}"
-                self.get_logger().warn(f"🔄 Floor Mismatch! Switching target to: {new_room_key}")
-
-                if new_room_key in self.rooms_dict:
-                    stair_data = self.rooms_dict[new_room_key]
-                    stair_coords = stair_data.get(self.default_way, [0.0, 0.0])
-                    self.update_goal = [float(stair_coords[0]), float(stair_coords[1])]
-                    self.update_floor = response.current_floor
-                    
-                    # --- จุดที่ต้องเพิ่ม ---
-                    self.service_called = False # ปลดล็อคกรณีไปบันได
+                new_key = f"{res.status}_Stair{int(res.current_floor)}"
+                if new_key in self.rooms_dict:
+                    coords = self.rooms_dict[new_key].get(self.default_way, [0.0, 0.0])
+                    self.update_goal = [float(coords[0]), float(coords[1])]
+                    self.update_floor = res.current_floor
                     self.current_state = RobotState.OPEN_MAP
                 else:
-                    self.get_logger().error(f"❌ Target '{new_room_key}' not found.")
-                    self.current_state = RobotState.IDLE
-                    
+                    self.reset_to_idle()
+            self.service_called = False
         except Exception as e:
-            self.get_logger().error(f"Service call failed: {e}")
-            self.current_state = RobotState.IDLE
-
-    def call_open_map_service(self):
-        while not self.cli_open_map.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for OpenMap service...')
-        
-        req = OpenMap.Request()
-        # ส่งข้อมูลตามเงื่อนไขที่คุณระบุ
-        req.mode = self.mode[1]       # 'localize'
-        req.way = self.default_way       # 'back'
-        req.floor = float(self.update_floor)
-        
-        self.get_logger().info(f"📡 Calling OpenMap: Mode={req.mode}, Way={req.way}, Floor={req.floor}")
-        future = self.cli_open_map.call_async(req)
-        future.add_done_callback(self.open_map_response_callback)
+            self.get_logger().error(f"Floor Service Error: {e}")
+            self.reset_to_idle()
 
     def open_map_response_callback(self, future):
         try:
-            response = future.result()
-            self.get_logger().info(f"🗺️ Map Status: {response.status}")
-            if response.status == "success": # สมมติว่าคืนค่า success เมื่อเปิดแผนที่เสร็จ
-                self.service_called = False 
+            if future.result().status == "success":
                 self.current_state = RobotState.CHECK_LOCALIZE
             else:
-                self.get_logger().error(f"❌ OpenMap Failed: {response.status}")
-                self.current_state = RobotState.IDLE
-        except Exception as e:
-            self.get_logger().error(f"Service OpenMap failed: {e}")
-            self.current_state = RobotState.IDLE
-
-    def call_check_localize_service(self):
-        while not self.cli_localize.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for CheckLocalize service...')
-        
-        req = CheckLocalize.Request()
-        req.active = True  # ส่งค่า 1 (True) เพื่อ Activate
-        
-        self.get_logger().info("📡 Activating Localization Check...")
-        future = self.cli_localize.call_async(req)
-        future.add_done_callback(self.localize_response_callback)
+                self.reset_to_idle()
+            self.service_called = False
+        except: self.reset_to_idle()
 
     def localize_response_callback(self, future):
         try:
-            response = future.result()
-            if response.success:
-                self.get_logger().info("🎯 Localization Confirmed! Robot knows its position.")
-                self.service_called = False # ปลดล็อค Flag
+            if future.result().success:
                 self.current_state = RobotState.CHECK_POSITION
-            else:
-                self.get_logger().warn("⚠️ Localization failed. Retrying...")
-                self.service_called = False # ให้มันเรียกซ้ำใน Loop ถัดไป หรือจัดการ Error ตามเหมาะสม
-        except Exception as e:
-            self.get_logger().error(f"Service CheckLocalize failed: {e}")
-            self.current_state = RobotState.IDLE
-
-    def call_check_position_service(self):
-        while not self.cli_pos.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for CheckPosition service...')
-        
-        req = CheckPosition.Request()
-        
-        # เลือกพิกัดเป้าหมาย (ถ้ามีพิกัดบันไดที่เพิ่งอัปเดตมาให้ใช้ตัวนั้น)
-        target = self.update_goal if self.update_goal != [0, 0] else self.goal
-        
-        req.x = float(target[0])
-        req.y = float(target[1])
-        req.way = self.default_way # ส่ง 'back' ตามที่ตั้งไว้
-        
-        self.get_logger().info(f"📡 Sending Position: X={req.x}, Y={req.y}, Way={req.way}")
-        future = self.cli_pos.call_async(req)
-        future.add_done_callback(self.position_response_callback)
+            self.service_called = False
+        except: self.reset_to_idle()
 
     def position_response_callback(self, future):
         try:
-            response = future.result()
-            self.get_logger().info(f"✅ Position Confirmed. Updated Way: {response.update_way}")
-            
-            # กรณีมีการสลับทิศทาง (เช่น จาก back เป็น go)
-            if self.default_way != response.update_way:
-                self.get_logger().warn(f"🔄 Way changed to {response.update_way}. Re-fetching coordinates...")
-                
-                # 1. อัปเดตค่า Way หลักของระบบ
-                self.default_way = response.update_way
-                
-                # 2. ย้อนกลับไป IDLE เพื่อเตรียมโหลดข้อมูลใหม่
-                self.current_state = RobotState.IDLE
-                self.service_called = False
-
-                # 3. สั่งให้โหลดพิกัดใหม่ของห้องเดิม (target_room_name) ตาม Way ใหม่
-                if self.target_room_name in self.rooms_dict:
-                    self.get_logger().info(f"♻️ Re-loading {self.target_room_name} for {self.default_way} mode...")
-                    
-                    # ดึงข้อมูลพิกัดใหม่จาก JSON ตาม Way ที่เพิ่งได้มา
-                    new_coords = self.target_data.get(self.default_way, [0.0, 0.0])
-                    self.goal = [float(new_coords[0]), float(new_coords[1])]
-                    
-                    self.get_logger().info(f"📍 New Goal set to: {self.goal}")
-                    
-                    # 4. หลังจากโหลดพิกัดเสร็จ ให้เริ่มกระบวนการใหม่ทันที (Auto-start)
-                    # หรือถ้าต้องการให้หยุดรอคำสั่งใหม่จริงๆ ก็ไม่ต้องเปลี่ยน State ตรงนี้ครับ
-                    self.current_state = RobotState.CHECK_FLOOR 
-                else:
-                    self.get_logger().error("❌ Failed to re-load room data.")
-
+            res = future.result()
+            if self.default_way != res.update_way:
+                self.default_way = res.update_way
+                new_coords = self.target_data.get(self.default_way, [0.0, 0.0])
+                self.goal = [float(new_coords[0]), float(new_coords[1])]
+                self.current_state = RobotState.CHECK_FLOOR # Restart sequence with new way
             else:
-                # กรณีทิศทางถูกต้องแล้ว (ตรงกัน)
-                self.get_logger().info("🚀 Destination confirmed. Starting Navigation...")
-                self.service_called = False
                 self.current_state = RobotState.NAV2
-                
-        except Exception as e:
-            self.get_logger().error(f"❌ Service CheckPosition failed: {e}")
-            self.current_state = RobotState.IDLE
-
-    def call_nav2_service(self):
-            self.get_logger().info('📡 Checking nav2_service availability...')
-            
-            # 1. เช็ค Service ก่อน
-            if not self.cli_nav2.wait_for_service(timeout_sec=10.0):
-                self.get_logger().error('❌ nav2_service is NOT ONLINE after 10s!')
-                self.service_called = False 
-                return
-
-            # 2. สร้าง Request (ต้องอยู่นอก if ของการเช็ค Service)
-            req = Nav2.Request()
-            
-            # 3. เลือกเป้าหมาย (ใช้ logic เดียวกับ check_position)
-            target = self.update_goal if self.update_goal != [0.0, 0.0] else self.goal
-            
-            # 4. ตรวจสอบป้องกัน [0,0] อีกชั้น
-            if target == [0.0, 0.0]:
-                self.get_logger().error("❌ Target coordinates are [0, 0]. Moving to IDLE.")
-                self.current_state = RobotState.IDLE
-                self.service_called = False
-                return
-
-            req.x = float(target[0]) 
-            req.y = float(target[1])
-            
-            self.get_logger().info(f"🛰️ Sending Final Goal to Nav2: X={req.x}, Y={req.y}")
-            
-            # 5. สั่งเรียก Service จริง
-            future = self.cli_nav2.call_async(req)
-            future.add_done_callback(self.nav2_response_callback)
+            self.service_called = False
+        except: self.reset_to_idle()
 
     def nav2_response_callback(self, future):
-            try:
-                response = future.result()
-                if response.success:
-                    self.get_logger().info("🏁 [SUCCESS] Robot reached the destination!")
+        try:
+            if future.result().success:
+                if self.floor_status in ["Up", "Down"]:
+                    self.current_state = RobotState.GoToStair
                 else:
-                    self.get_logger().error("❌ [FAILED] Robot could not reach the destination.")
-                
-                # --- จบภารกิจ: รีเซ็ตทุกอย่างกลับไป IDLE ---
-                self.get_logger().info("💤 System returning to IDLE state. Ready for new orders.")
-                self.current_state = RobotState.IDLE
-                self.service_called = False
-                self.target_room_name = ""
-                self.goal = [0.0, 0.0]
-                self.update_goal = [0.0, 0.0]
-                
-            except Exception as e:
-                self.get_logger().error(f"❌ Service Nav2 call failed: {e}")
-                self.current_state = RobotState.IDLE
-                self.service_called = False
+                    self.reset_to_idle()
+            else: self.reset_to_idle()
+            self.service_called = False
+        except: self.reset_to_idle()
+
+    def stair_response_callback(self, future):
+        try:
+            if future.result().success:
+                self.current_state = RobotState.Controller
+            else: self.reset_to_idle()
+            self.service_called = False
+        except: self.reset_to_idle()
+
+    def controller_response_callback(self, future):
+        try:
+            if future.result().success:
+                self.current_state = RobotState.CHECK_FLOOR # Loop back to check floor
+            else: self.reset_to_idle()
+            self.service_called = False
+        except: self.reset_to_idle()
+
+    # --- Subprocess Management ---
+    def execute_fusion_launch(self):
+        cmd = "ros2 launch my_fusion fusion_launch.py"
+        try:
+            self.launch_process = subprocess.Popen(cmd, shell=True, preexec_fn=os.setsid)
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Launch Error: {e}")
+            return False
+
+    def terminate_launch_file(self):
+        if self.launch_process:
+            try:
+                os.killpg(os.getpgid(self.launch_process.pid), signal.SIGTERM)
+                self.launch_process.wait(timeout=2)
+            except: pass
+            self.launch_process = None
+
+    def reset_to_idle(self):
+        self.get_logger().info("💤 Mission Finished or Error. Resetting to IDLE.")
+        self.call_stop_map_service()
+        self.terminate_launch_file()
+        self.current_state = RobotState.IDLE
+        self.service_called = False
+        self.update_goal = [0.0, 0.0]
+
+    def call_stop_map_service(self):
+        if self.cli_open_map.wait_for_service(timeout_sec=0.5):
+            self.cli_open_map.call_async(OpenMap.Request(mode="stop"))
 
 def main(args=None):
     rclpy.init(args=args)
     node = StateManagerNode()
-    
-    # ใช้ Executor แทนการ spin ปกติ
     executor = rclpy.executors.MultiThreadedExecutor()
     executor.add_node(node)
-    
     try:
         executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        node.terminate_launch_file()
         node.destroy_node()
         rclpy.shutdown()
 

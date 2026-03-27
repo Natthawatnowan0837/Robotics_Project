@@ -12,7 +12,7 @@ float Platform_Output = 0.0;
 
 float error_sensors = 5.0;
 // ปรับ Gain: Kp, Ki, Kd
-float P_Kp = 10.0, P_Ki = 0.0, P_Kd = 0.2; 
+float P_Kp = 20.0, P_Ki = 0.0, P_Kd = 0.8; 
 
 static long last_pid_time = 0;
 static unsigned long pid_interval = 20; 

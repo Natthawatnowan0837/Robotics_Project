@@ -31,9 +31,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'depth_to_pointclound = detection_stair.depth_to_pointclound:main',
-            'train_model = detection_stair.train_model:main',
-            'test_model = detection_stair.test_model:main',
+            'depth_to_pointclound = my_detection_stair.depth_to_pointclound:main',
+            'train_model = my_detection_stair.train_model:main',
+            'test_model = my_detection_stair.test_model:main',
+            'go_to_stair = my_detection_stair.go_to_stair:main ',
         ],
     },
 )

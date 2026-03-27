@@ -1,116 +1,130 @@
+#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge
 import cv2
-import torch
 import numpy as np
+import os
 
-class CameraYoloNode(Node):
+os.environ['ULTRALYTICS_OFFLINE'] = 'True' 
+from ultralytics import YOLO 
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+
+class YoloV8UltraFastNode(Node):
     def __init__(self):
-        super().__init__('camera_yolo_node')
+        super().__init__('yolo_v8_ultra_fast_node')
         self.bridge = CvBridge()
-        self.depth_image = None
         
-        # --- [ 1. โหลดโมเดล ] ---
+        # ==========================================
+        # [ ส่วนที่แก้ไขง่าย - CONFIGURATION ]
+        # ==========================================
         self.model_path = '/home/noone/Robotics_Project/best.pt'
-        self.hub_path = '/home/noone/.cache/torch/hub/ultralytics_yolov5_master'
-        
-        try:
-            self.model = torch.hub.load(self.hub_path, 'custom', 
-                                        path=self.model_path, 
-                                        source='local')
-            self.model.conf = 0.5
-            self.get_logger().info('YOLOv5 Model Loaded!')
-        except Exception as e:
-            self.get_logger().error(f'Model load failed: {e}')
-            self.model = None
+        self.roi_w_ratio = 0.7       # ความกว้าง 70%
+        self.roi_h_ratio = 1.0       # ความสูง 100%
+        self.safety_threshold = 1.5  # ระยะเบรก (เมตร)
+        self.inference_interval = 4  
+        self.ai_imgsz = 160          
+        # ==========================================
 
-        # --- [ 2. Subscriptions ] ---
-        self.color_sub = self.create_subscription(
-            Image, '/camera/camera/color/image_raw', self.color_callback, 10)
-        self.depth_sub = self.create_subscription(
-            Image, '/camera/camera/depth/image_rect_raw', self.depth_callback, 10)
-        
+        self.model = YOLO(self.model_path)
         self.frame_count = 0
-        self.last_results = None 
-        self.get_logger().info('Node Ready: Safety Logic with Lane Lines')
+        self.last_results = None
+        self.depth_image = None
+
+        qos_fast = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=1)
+        self.depth_sub = self.create_subscription(CompressedImage, '/camera/camera/depth/image_rect_raw/compressedDepth', self.depth_callback, qos_fast)
+        self.color_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.color_callback, 10)
+        
+        self.get_logger().info('✅ Distance will now show at Box Center')
 
     def depth_callback(self, msg):
-        self.depth_image = self.bridge.imgmsg_to_cv2(msg, msg.encoding)
+        try:
+            depth_data = np.frombuffer(msg.data, np.uint8)
+            self.depth_image = cv2.imdecode(depth_data[12:], cv2.IMREAD_UNCHANGED)
+        except: pass
 
     def color_callback(self, msg):
-        if self.model is None:
-            return
+        if self.model is None or self.depth_image is None: return
 
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            h, w, _ = cv_image.shape
-            self.frame_count += 1
+            full_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            h, w, _ = full_img.shape
             stop_warning = False
 
-            # --- [ 3. วาดเส้นแบ่งเลนแนวตั้ง (พื้นที่ตรงกลาง 400px) ] ---
-            mid_x = w // 2
-            left_line = mid_x - 250
-            right_line = mid_x + 250
+            # --- [ STEP 1: ROI ] ---
+            x1_roi = int(w * (1 - self.roi_w_ratio) / 2)
+            y1_roi = int(h * (1 - self.roi_h_ratio) / 2)
+            x2_roi = x1_roi + int(w * self.roi_w_ratio)
+            y2_roi = y1_roi + int(h * self.roi_h_ratio)
             
-            # วาดเส้นประหรือเส้นทึบสีขาว (BGR: 255, 255, 255)
-            cv2.line(cv_image, (left_line, 0), (left_line, h), (255, 255, 255), 2)
-            cv2.line(cv_image, (right_line, 0), (right_line, h), (255, 255, 255), 2)
+            cv2.rectangle(full_img, (x1_roi, y1_roi), (x2_roi, y2_roi), (200, 200, 200), 1)
 
-            # 4. Inference ทุก 3 เฟรม
-            if self.frame_count % 3 == 0:
-                input_img = cv2.resize(cv_image, (640, 480))
-                results = self.model(input_img)
-                self.last_results = results.pandas().xyxy[0]
+            roi_img = full_img[y1_roi:y2_roi, x1_roi:x2_roi]
+            
+            self.frame_count += 1
+            if self.frame_count % self.inference_interval == 0:
+                self.last_results = self.model.predict(roi_img, imgsz=self.ai_imgsz, conf=0.5, verbose=False)
 
-            # 5. ประมวลผลผลลัพธ์
+            # --- [ STEP 2: Process Result & Distance ] ---
             if self.last_results is not None:
-                ratio_x = w / 640
-                ratio_y = h / 480
+                for result in self.last_results:
+                    for box in result.boxes:
+                        bx1, by1, bx2, by2 = map(int, box.xyxy[0])
+                        gx1, gy1, gx2, gy2 = bx1 + x1_roi, by1 + y1_roi, bx2 + x1_roi, by2 + y1_roi
+                        
+                        # คำนวณจุดกึ่งกลาง (Center of Box)
+                        cx, cy = (gx1 + gx2) // 2, (gy1 + gy2) // 2
+                        
+                        # ดึงค่า Depth (Median ในพื้นที่เล็กๆ รอบจุดศูนย์กลาง 5x5 เพื่อความแม่นยำ)
+                        obj_depth = self.depth_image[max(0,cy-2):min(h,cy+2), max(0,cx-2):min(w,cx+2)]
+                        valid_depths = obj_depth[obj_depth > 0]
+                        
+                        if len(valid_depths) > 0:
+                            distance_m = np.median(valid_depths) / 1000.0
+                            
+                            color = (0, 255, 0)
+                            if distance_m < self.safety_threshold:
+                                color = (0, 0, 255)
+                                stop_warning = True
+                            
+                            # วาดกรอบ Boxing
+                            cv2.rectangle(full_img, (gx1, gy1), (gx2, gy2), color, 2)
+                            
+                            # วาดจุดกึ่งกลาง (Center Dot)
+                            cv2.circle(full_img, (cx, cy), 3, (255, 255, 255), -1)
+                            
+                            # --- [ หัวใจสำคัญ: แสดง Distance กลาง Box ] ---
+                            dist_label = f"{distance_m:.2f}m"
+                            # คำนวณขนาดตัวอักษรเพื่อให้จัดวางตรงกลางได้สวย
+                            (text_w, text_h), _ = cv2.getTextSize(dist_label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                            cv2.putText(full_img, dist_label, (cx - text_w // 2, cy + text_h // 2), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            
+                            # แสดงชื่อวัตถุไว้ที่หัว Box เหมือนเดิม (ตัวเล็กหน่อย)
+                            name_label = f"{self.model.names[int(box.cls[0])]}"
+                            cv2.putText(full_img, name_label, (gx1, gy1 - 5), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
-                for _, row in self.last_results.iterrows():
-                    xmin, ymin = int(row['xmin'] * ratio_x), int(row['ymin'] * ratio_y)
-                    xmax, ymax = int(row['xmax'] * ratio_x), int(row['ymax'] * ratio_y)
-                    center_x, center_y = (xmin + xmax) // 2, (ymin + ymax) // 2
-                    
-                    distance_m = -1.0
-                    if self.depth_image is not None:
-                        if 0 <= center_y < self.depth_image.shape[0] and 0 <= center_x < self.depth_image.shape[1]:
-                            dist_val = self.depth_image[center_y, center_x]
-                            if dist_val > 0:
-                                distance_m = float(dist_val) / 1000.0
-                    
-                    # Safety Logic (1.8 เมตร)
-                    color = (0, 255, 0)
-                    if 0 < distance_m < 1.8:
-                        color = (0, 0, 255)
-                        stop_warning = True
-                    
-                    label = f"{row['name']} {distance_m:.2f}m" if distance_m > 0 else f"{row['name']} Unknown"
-                    cv2.rectangle(cv_image, (xmin, ymin), (xmax, ymax), color, 2)
-                    cv2.putText(cv_image, label, (xmin, ymin - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-            # 6. แสดงคำเตือน STOP
+            # --- [ STEP 3: Warning UI ] ---
             if stop_warning:
-                cv2.rectangle(cv_image, (0, 0), (w, 60), (0, 0, 255), -1)
-                cv2.putText(cv_image, "!!! STOP - OBJECT TOO CLOSE !!!", (50, 45), 
-                            cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 2)
+                cv2.rectangle(full_img, (0, 0), (w, 50), (0, 0, 255), -1)
+                cv2.putText(full_img, "!!! OBSTACLE !!!", (w//2 - 100, 35), 
+                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 2)
 
-            cv2.imshow("Safety Monitor", cv_image)
+            display_img = cv2.resize(full_img, (0,0), fx=0.8, fy=0.8)
+            cv2.imshow("Optimized AI Monitor", display_img)
             cv2.waitKey(1)
-
+            
         except Exception as e:
             self.get_logger().error(f'Error: {e}')
 
 def main(args=None):
     rclpy.init(args=args)
-    node = CameraYoloNode()
+    node = YoloV8UltraFastNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+    except KeyboardInterrupt: pass
     finally:
         cv2.destroyAllWindows()
         node.destroy_node()

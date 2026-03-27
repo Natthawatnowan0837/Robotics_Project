@@ -1,111 +1,57 @@
-// #include <Arduino.h>
+// #include <Arduino.h>  // <--- ต้องมีบรรทัดนี้ใน PlatformIO
 // #include <Wire.h>
-// #include <MS5611.h>
 
 // #define TCAADDR 0x70
-// #define MS5611_CHANNEL 6
 
-// // ==========================================
-// // 1. นิยาม Class SimpleKalmanFilter (ย้ายออกมาไว้นอก loop)
-// // ==========================================
-// class SimpleKalmanFilter {
-//   private:
-//     float err_measure;
-//     float err_estimate;
-//     float q;
-//     float current_estimate;
-//     float last_estimate;
-//     float kalman_gain;
-//     bool is_initialized;
-
-//   public:
-//     SimpleKalmanFilter(float mea_e, float est_e, float q) {
-//       err_measure = mea_e;
-//       err_estimate = est_e;
-//       this->q = q;
-//       is_initialized = false;
-//     }
-
-//     float updateEstimate(float mea) {
-//       if (!is_initialized) {
-//         last_estimate = mea;
-//         current_estimate = mea;
-//         is_initialized = true;
-//       }
-//       kalman_gain = err_estimate / (err_estimate + err_measure);
-//       current_estimate = last_estimate + kalman_gain * (mea - last_estimate);
-//       err_estimate =  (1.0 - kalman_gain) * err_estimate + fabs(last_estimate - current_estimate) * q;
-//       last_estimate = current_estimate;
-//       return current_estimate;
-//     }
-// };
-
-// // ==========================================
-// // 2. ประกาศ Object และตัวแปร Global
-// // ==========================================
-// MS5611 ms5611(0x77); 
-
-// // สร้าง Object ของ Kalman Filter (ตั้งค่า Tuning ตามที่คุณให้มาล่าสุด)
-// SimpleKalmanFilter pressureKalman(0.1, 0.1, 0.05);
-// SimpleKalmanFilter tempKalman(0.1, 0.1, 0.05);
-
-// unsigned long last_read_time = 0;
-// const long interval = 500; 
-
-// // ฟังก์ชันเลือกช่อง TCA
 // void tcaSelect(uint8_t i) {
-//     if (i > 7) return;
-//     Wire.beginTransmission(TCAADDR);
-//     Wire.write(1 << i);
-//     Wire.endTransmission();
+//   if (i > 7) return;
+//   Wire.beginTransmission(TCAADDR);
+//   Wire.write(1 << i);
+//   Wire.endTransmission();
 // }
 
 // void setup() {
-//     Serial.begin(115200);
-//     while (!Serial);
-    
-//     Wire.begin(21, 22);
-//     Wire.setClock(100000); 
+//   // เริ่มต้น Serial
+//   Serial.begin(115200);
+//   while (!Serial); 
 
-//     Serial.println("\n--- MS5611 with Custom Kalman Class ---");
-
-//     tcaSelect(MS5611_CHANNEL);
-//     delay(10);
-
-//     if (ms5611.begin() == true) {
-//         Serial.print("✅ MS5611 found at Channel ");
-//         Serial.println(MS5611_CHANNEL);
-//     } else {
-//         Serial.println("❌ MS5611 NOT found!");
-//         while (1);
-//     }
-
-//     ms5611.reset(1); 
-//     ms5611.setOversampling(OSR_ULTRA_HIGH);
+//   // เริ่มต้น I2C (SDA=21, SCL=22 สำหรับ ESP32)
+//   Wire.begin(21, 22); 
+  
+//   Serial.println("\n--- TCA9548A I2C Scanner ---");
 // }
 
 // void loop() {
-//     // อ่านค่าทุกๆ 500ms โดยไม่ใช้ delay
-//     if (millis() - last_read_time >= interval) {
-//         last_read_time = millis();
+//   for (uint8_t t = 0; t < 8; t++) {
+//     tcaSelect(t);
+//     Serial.print("Scanning Channel ");
+//     Serial.print(t);
+//     Serial.print(": ");
 
-//         tcaSelect(MS5611_CHANNEL);
+//     bool found = false;
+//     for (uint8_t addr = 1; addr < 127; addr++) {
+//       if (addr == TCAADDR) continue; 
 
-//         int result = ms5611.read();
+//       Wire.beginTransmission(addr);
+//       uint8_t error = Wire.endTransmission(); // ใช้ uint8_t แทน byte เพื่อความชัวร์
 
-//         if (result == MS5611_READ_OK) {
-//             float raw_p = ms5611.getPressure();
-//             float raw_t = ms5611.getTemperature();
-
-//             // ใช้งาน Kalman Filter ที่สร้างจาก Class ด้านบน
-//             float filtered_p = pressureKalman.updateEstimate(raw_p);
-//             float filtered_t = tempKalman.updateEstimate(raw_t);
-
-//             // แสดงผลเทียบกันให้เห็นความแตกต่าง
-//             Serial.print("Pressure Filtered: "); Serial.print(filtered_p, 2);
-//             Serial.print(" | Temp Filtered: "); Serial.println(filtered_t, 2);
-//         } else {
-//             Serial.println("⚠️ Sensor Read Error!");
-//         }
+//       if (error == 0) {
+//         Serial.print("Found device at 0x");
+//         if (addr < 16) Serial.print("0");
+//         Serial.print(addr, HEX);
+        
+//         if (addr == 0x68 || addr == 0x69) Serial.print(" (MPU6050)");
+//         else if (addr == 0x77 || addr == 0x76) Serial.print(" (MS5611)");
+//         else if (addr == 0x36) Serial.print(" (AS5600)"); // แถมรหัส Magnetic Encoder ให้ด้วย
+        
+//         Serial.print(" | ");
+//         found = true;
+//       }
 //     }
+//     if (!found) Serial.print("No devices found.");
+//     Serial.println();
+//   }
+
+//   Serial.println("--- Scan Finished ---");
+//   delay(5000); 
 // }
