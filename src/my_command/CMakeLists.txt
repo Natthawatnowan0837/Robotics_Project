@@ -24,6 +24,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/CheckPosition.srv"
   "srv/Nav2.srv"
   "srv/SequenceCmd.srv"
+  "srv/GotoStair.srv"
+  "srv/Controller.srv"
+  "srv/Goal.srv"
+  # "srv/Speaking.srv"
+  # "srv/Record.srv"
 )
 
 # ---------------------------------------------------------

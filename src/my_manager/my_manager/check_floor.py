@@ -89,14 +89,18 @@ class Check_floor(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Check_floor()
+    node = Check_floor() # หรือชื่อคลาสโหนดของคุณ
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("🛑 Stopping Floor Manager Server")
+        # ใช้คำสั่ง log ธรรมดา ไม่ต้องเรียกใช้ผ่านโหนดที่กำลังจะตายก็ได้ถ้าเกิด error
+        print("Stopping Floor Manager Server...")
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        # ตรวจสอบสถานะก่อนสั่งทำลายโหนดและ shutdown
+        if rclpy.ok():
+            node.destroy_node()
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

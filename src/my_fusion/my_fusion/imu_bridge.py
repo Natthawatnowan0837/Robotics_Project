@@ -80,9 +80,11 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
-    node.destroy_node()
-    rclpy.shutdown()
+        node.get_logger().info('IMU Bridge stopping...')
+    finally:
+        if rclpy.ok(): # เช็คว่ายังไม่ถูกปิดซ้ำ
+            node.destroy_node()
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

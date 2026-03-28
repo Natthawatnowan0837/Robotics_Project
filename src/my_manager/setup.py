@@ -44,7 +44,8 @@ setup(
         'console_scripts': [
             'esp32_manager = my_manager.esp32_manager:main',
             'my_manager = my_manager.my_manager:main',
-            'nav_goal = my_manager.nav_goal:main',
+            'goal = my_manager.goal:main',
+            'nav2 = my_manager.nav2:main',
             'check_floor = my_manager.check_floor:main',
             'check_localize = my_manager.check_localize:main',
             'check_position = my_manager.check_position:main',
