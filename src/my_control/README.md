@@ -30,6 +30,6 @@ ros2 topic echo /rtabmap/localization_pose --once
 
 ros2 launch nav2_bringup navigation_launch.py \
 use_sim_time:=false \
-params_file:=/home/noone/Robotics_Project/src/my_control/config/nav2_params.yaml \
+params_file:=/home/noone/Robotics_Project/src/my_manager/config/nav2_params.yaml \
 use_amcl:=false \
-map:=/rtabmap/map
+map:=/rtabmap/map \

@@ -6,6 +6,21 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 def generate_launch_description():
+
+    config_path = os.path.join(
+        get_package_share_directory('my_manager'), # เปลี่ยนเป็นชื่อ package คุณ
+        'config',
+        'twist_mux.yaml'
+    )
+
+    twist_mux_node = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='twist_mux',
+        parameters=[config_path],
+        remappings=[('/cmd_vel_out', '/cmd_vel')] # ส่ง Output ออกไปที่หุ่นยนต์จริง
+    )
+
     package_name = 'my_fusion'
 
     esp32_manager_node = Node(
@@ -38,12 +53,12 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'false'}.items()
     )
 
-    # pid_node = Node(
-    #     package='my_control',
-    #     executable='pid_parameters',
-    #     name='pid_node',
-    #     output='screen'
-    # )
+    pid_node = Node(
+        package='my_control',
+        executable='pid_parameters',
+        name='pid_node',
+        output='screen'
+    )
 
     # --- ส่งโหนดทั้งหมดออกไปรัน ---
     return LaunchDescription([
@@ -51,5 +66,6 @@ def generate_launch_description():
         encoders_node,
         imu_node,
         ekf_launch,
-        # pid_node,
+        pid_node,
+        twist_mux_node
     ])

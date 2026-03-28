@@ -1,0 +1,21 @@
+twist_mux:
+  ros__parameters:
+    # 1. ประกาศชื่อของแหล่งข้อมูลทั้งหมดก่อน
+    topics:
+      obstacle_stop:
+        topic: "cmd_vel_obstacle"
+        timeout: 0.5
+        priority: 100
+      joystick:
+        topic: "cmd_vel_teleop"
+        timeout: 0.5
+        priority: 50
+      nav2:
+        topic: "cmd_vel_nav"
+        timeout: 0.5
+        priority: 10
+        
+      rotation:
+        topic: "cmd_vel_rotation"
+        timeout: 0.5
+        priority: 5

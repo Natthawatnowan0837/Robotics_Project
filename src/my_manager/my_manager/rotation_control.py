@@ -3,158 +3,138 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray
+from my_command.srv import SequenceCmd 
+import math
 import time
 
-# นำเข้า Service Interface (ตรวจสอบว่าชื่อตรงกับใน srv/ ของคุณ)
-from my_command.srv import SequenceCmd
-
-class MoveSequenceNode(Node):
+class RotationControlNode(Node):
     def __init__(self):
-        super().__init__('move_sequence_node')
-        
-        # ใช้ ReentrantCallbackGroup เพื่อให้ Service, Sensor และ Timer ทำงานขนานกันได้
+        super().__init__('rotation_control_node')
         self.group = ReentrantCallbackGroup()
 
-        # Parameters
-        self.declare_parameter('linear_speed', 0.3)
-        self.declare_parameter('angular_speed', 0.6)
-        self.declare_parameter('move_duration', 1.0)
-        
-        self.lin_vel = self.get_parameter('linear_speed').value
-        self.ang_vel = self.get_parameter('angular_speed').value
-        self.duration = self.get_parameter('move_duration').value
+        # --- [ Parameters ] ---
+        self.declare_parameter('kp_yaw', 0.45)
+        self.declare_parameter('max_ang_vel', 0.5)
+        self.declare_parameter('min_ang_vel', 0.15)
+        self.declare_parameter('tolerance', 1.2)
 
         # Variables
-        self.current_yaw = 0.0
-        self.target_yaw = 0.0
-        self.internal_state = "IDLE" 
-        self.is_action_done = False
-        self.start_time = 0.0
+        self.current_yaw_deg = 0.0
+        self.target_yaw_deg = 0.0
+        self.is_rotating = False
+        self.rotate_dir = 0 # 1: บังคับซ้าย (ทวนเข็ม), -1: บังคับขวา (ตามเข็ม)
 
-        # --- [ Pub/Sub ] ---
-        # Publisher สำหรับสั่งการล้อ
-        self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        
-        # Subscriber สำหรับรับค่า IMU/Odom จากเซนเซอร์
-        self.create_subscription(
-            Float32MultiArray, 
-            '/sensors', 
-            self.sensor_callback, 
-            10, 
-            callback_group=self.group
+        # --- [ QoS & Sub/Pub/Srv ] ---
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
         )
+        self.odom_sub = self.create_subscription(Odometry, '/odom/filtered', self.odom_callback, qos_profile, callback_group=self.group)
+        self.cmd_pub = self.create_publisher(Twist, 'cmd_vel_rotation', 10)
+        self.srv = self.create_service(SequenceCmd, 'rotate_service', self.handle_rotate_service, callback_group=self.group)
+        self.create_timer(0.05, self.control_loop, callback_group=self.group)
 
-        # --- [ Service Server ] ---
-        self.srv = self.create_service(
-            SequenceCmd, 
-            'sequence_cmd_service', 
-            self.handle_sequence_cmd,
-            callback_group=self.group
-        )
+        self.get_logger().info("🚀 Rotation Control (Force Direction Mode) Started!")
 
-        # Control Loop (10Hz) สำหรับส่งความเร็ว
-        self.create_timer(0.1, self.control_loop, callback_group=self.group)
-        
-        self.get_logger().info("=== Move Sequence Service Server Ready ===")
+    def quaternion_to_euler(self, q):
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        return math.degrees(math.atan2(siny_cosp, cosy_cosp))
 
-    def sensor_callback(self, msg):
-        # รับค่า Yaw (องศา) จากเซนเซอร์ตัวที่ 3
-        if len(msg.data) >= 3:
-            self.current_yaw = msg.data[2]
+    def odom_callback(self, msg):
+        self.current_yaw_deg = self.quaternion_to_euler(msg.pose.pose.orientation)
+        if not self.is_rotating:
+            self.get_logger().info(f"📍 Current Yaw: {self.current_yaw_deg:.2f}°", throttle_duration_sec=1.0)
 
-    def handle_sequence_cmd(self, request, response):
-        """ Callback เมื่อได้รับคำสั่ง Service: จะบล็อกจนกว่าหุ่นยนต์จะขยับเสร็จ """
+    def handle_rotate_service(self, request, response):
         cmd = request.state.lower().strip()
-        self.get_logger().info(f"📥 Service Request Received: {cmd}")
-
-        # เตรียมตัวเริ่มทำงาน
-        self.is_action_done = False
-        self.start_time = self.get_clock().now().nanoseconds / 1e9
-
-        if cmd == 'fwd':
-            self.internal_state = "FORWARD"
-        elif cmd == 'back':
-            self.internal_state = "BACKWARD"
-        elif cmd == 'left180':
-            self.target_yaw = self.current_yaw + 180.0
-            self.internal_state = "ROTATING"
-        elif cmd == 'right180':
-            self.target_yaw = self.current_yaw - 180.0
-            self.internal_state = "ROTATING"
+        angle_to_turn = 0.0
+        
+        # --- ล็อคทิศทางตามชื่อคำสั่ง ---
+        if 'left' in cmd:
+            self.rotate_dir = 1  # บังคับหมุนทวนเข็มนาฬิกา (Positive)
+        elif 'right' in cmd:
+            self.rotate_dir = -1 # บังคับหมุนตามเข็มนาฬิกา (Negative)
         else:
-            self.get_logger().error(f"❌ Unknown command: {cmd}")
-            response.status = "ERROR" # แก้ให้ตรงกับ .srv (status หรือ state)
+            self.rotate_dir = 0  # กรณีอื่นๆ ให้หาทางสั้นที่สุด (Default)
+
+        # กำหนดมุมที่ต้องหมุน
+        if '90' in cmd: angle_to_turn = 90.0 * self.rotate_dir
+        elif '180' in cmd: angle_to_turn = 180.0 * self.rotate_dir
+        else:
+            self.get_logger().error(f"❌ Unknown Command: {cmd}")
+            response.status = "FAILED"
             return response
 
-        # --- [ ช่วงรอให้งานเสร็จ ] ---
-        # วนลูปเช็คสถานะจนกว่าจะกลับเป็น IDLE (ซึ่งถูกตั้งโดย finish_action)
-        while rclpy.ok() and not self.is_action_done:
+        # คำนวณเป้าหมาย
+        start_angle = self.current_yaw_deg
+        self.target_yaw_deg = start_angle + angle_to_turn
+        
+        # Normalize Target
+        while self.target_yaw_deg > 180: self.target_yaw_deg -= 360
+        while self.target_yaw_deg < -180: self.target_yaw_deg += 360
+
+        self.is_rotating = True
+        self.get_logger().info(f"🔄 ROTATING {cmd.upper()} | From: {start_angle:.2f}° | Target: {self.target_yaw_deg:.2f}°")
+
+        while self.is_rotating and rclpy.ok():
             time.sleep(0.1)
 
-        # ส่ง Response กลับเมื่อทำงานจบขั้นตอนแล้ว
-        response.status = "DONE"
-        response.angle = self.current_yaw
-        self.get_logger().info(f"📤 Sent Service Response: {cmd} Finished.")
+        response.status = "SUCCESS"
+        response.angle = self.current_yaw_deg
         return response
 
     def control_loop(self):
-        """ ฟังก์ชันคุมการเคลื่อนที่: จะส่งข้อมูลเฉพาะตอนทำงานเท่านั้น """
-        if self.internal_state == "IDLE":
-            return # สำคัญ: ไม่ Publish ค่า 0 ออกไปกวน Navigation Stack
+        if not self.is_rotating:
+            return
 
-        msg = Twist()
-        now = self.get_clock().now().nanoseconds / 1e9
-
-        if self.internal_state == "FORWARD":
-            if (now - self.start_time) < self.duration:
-                msg.linear.x = self.lin_vel
-            else:
-                self.finish_action()
-
-        elif self.internal_state == "BACKWARD":
-            if (now - self.start_time) < self.duration:
-                msg.linear.x = -self.lin_vel
-            else:
-                self.finish_action()
-
-        elif self.internal_state == "ROTATING":
-            # คำนวณ Error มุม (Normalize -180 to 180)
-            error = self.target_yaw - self.current_yaw
+        # 1. คำนวณ Error เบื้องต้น
+        error = self.target_yaw_deg - self.current_yaw_deg
+        
+        # 2. ปรับจูน Error ตามทิศทางที่บังคับ (Force Direction)
+        # ถ้าบังคับขวา (Right) แต่ Error ดันเป็นบวก ต้องลบ 360 เพื่อให้มันหมุนอ้อมไปทางขวาแทน
+        if self.rotate_dir == -1 and error > 0:
+            error -= 360
+        # ถ้าบังคับซ้าย (Left) แต่ Error ดันเป็นลบ ต้องบวก 360 เพื่อให้มันหมุนอ้อมไปทางซ้ายแทน
+        elif self.rotate_dir == 1 and error < 0:
+            error += 360
+        # ถ้าเป็นกรณีทั่วไป (Shortest path)
+        elif self.rotate_dir == 0:
             while error > 180: error -= 360
             while error < -180: error += 360
-            
-            if abs(error) <= 2.5: # ยอมรับความคลาดเคลื่อน 2.5 องศา
-                self.finish_action()
-            else:
-                # หมุนตามทิศทางของ Error
-                msg.angular.z = self.ang_vel if error > 0 else -self.ang_vel
+
+        self.get_logger().info(f"📈 Progress: Current {self.current_yaw_deg:>7.2f}° | Error {error:>7.2f}°", throttle_duration_sec=0.2)
+
+        msg = Twist()
+        tolerance = self.get_parameter('tolerance').value
+
+        if abs(error) < tolerance:
+            self.cmd_pub.publish(Twist()) 
+            self.is_rotating = False
+            self.get_logger().info(f"🎯 REACHED TARGET! Final Angle: {self.current_yaw_deg:.2f}°")
+            return
+
+        kp = self.get_parameter('kp_yaw').value
+        max_v = self.get_parameter('max_ang_vel').value
+        min_v = self.get_parameter('min_ang_vel').value
+
+        speed = error * kp
         
-        # ส่งคำสั่งความเร็วไปยัง Topic /cmd_vel
+        if abs(speed) > max_v: speed = max_v if speed > 0 else -max_v
+        if abs(speed) < min_v: speed = min_v if speed > 0 else -min_v
+
+        msg.angular.z = speed
         self.cmd_pub.publish(msg)
 
-    def finish_action(self):
-        """ หยุดหุ่นยนต์และเซ็ตสถานะเป็นพร้อมทำงานขั้นต่อไป """
-        # หยุดล้อทันที
-        self.cmd_pub.publish(Twist()) 
-        self.internal_state = "IDLE"
-        
-        # รอให้นิ่ง 1 วินาที เพื่อให้กล้องจับภาพ RTAB-Map ได้ชัดเจน
-        time.sleep(1.0) 
-        
-        # ปลดล็อคให้ handle_sequence_cmd ส่ง Response กลับ
-        self.is_action_done = True
-        self.get_logger().info("✅ Action Finished & Stabilized.")
-
-def main():
-    rclpy.init()
-    node = MoveSequenceNode()
-    
-    # ใช้ MultiThreadedExecutor เพื่อให้สามารถรอใน Service ได้โดย Timer ยังทำงานอยู่
+def main(args=None):
+    rclpy.init(args=args)
+    node = RotationControlNode()
     executor = MultiThreadedExecutor()
     executor.add_node(node)
-    
     try:
         executor.spin()
     except KeyboardInterrupt:
