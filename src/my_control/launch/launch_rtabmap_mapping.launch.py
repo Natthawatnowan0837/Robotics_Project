@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, TimerAction, DeclareLaunchArgument, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -11,20 +11,9 @@ def generate_launch_description():
     package_name = 'my_manager' 
     home_directory = os.path.expanduser('~')
     
-    # Path สำหรับเก็บแผนที่
+    # กำหนด Path พื้นฐานสำหรับ Maps
+    # แนะนำ: ใช้ PathJoinSubstitution จะปลอดภัยกว่าการต่อ String เองใน Python
     src_maps_path = os.path.join(home_directory, 'Robotics_Project/src/my_manager/maps')
-
-    apriltag_config = os.path.join(
-        get_package_share_directory(package_name),
-        'config',
-        'apriltag.yaml'
-    )
-    
-    rviz_config_path = os.path.join(
-        get_package_share_directory(package_name),
-        'rviz',
-        'localized.rviz'
-    )
 
     # --- 1. Arguments ---
     floor_arg = DeclareLaunchArgument(
@@ -36,24 +25,57 @@ def generate_launch_description():
         description='ชื่อไฟล์ database'
     )
 
-    # FIXED: แก้ไข PythonExpression ให้รับค่า String จาก LaunchConfiguration อย่างถูกต้อง
+    # ดึงค่าจาก Argument
+    floor_val = LaunchConfiguration('floor')
+    db_name_val = LaunchConfiguration('db_name')
+
+    # FIXED: ใช้ PythonExpression ที่สะอาดขึ้น หรือใช้ PathJoinSubstitution
+    # การต่อ Path ใน ROS2 Launch ต้องระวังเรื่อง "Substitution" objects
     database_full_path = PythonExpression([
-        "'", src_maps_path, "/' + '", LaunchConfiguration('floor'), "' + '/' + '", LaunchConfiguration('db_name'), "' + '.db'"
+        "'", src_maps_path, "/' + '", floor_val, "' + '/' + '", db_name_val, "' + '.db'"
     ])
 
+    # --- 2. Included Launch Files ---
+    
+    # Realsense
+    realsense = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
+        )]),
+        launch_arguments={
+            'depth_module.profile': '640,480,15',
+            'rgb_module.profile': '640,480,15',
+            'pointcloud.enable': 'true',
+            'align_depth.enable': 'true',
+            'enable_gyro': 'true',
+            'enable_accel': 'true',
+            'unite_imu_method': '2',
+            'enable_sync': 'true',
+        }.items()
+    )
 
-    # # AprilTag
-    # apriltag_node = Node(
-    #     package='apriltag_ros',
-    #     executable='apriltag_node',
-    #     name='apriltag_node',
-    #     parameters=[apriltag_config],
-    #     remappings=[
-    #         ('image_rect', '/camera/camera/color/image_raw'),
-    #         ('camera_info', '/camera/camera/color/camera_info'),
-    #         ('detections', '/detections')
-    #     ]
-    # )
+    # Robot State Publisher
+    rsp = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('my_control'), 'launch', 'rsp.launch.py'
+        )]),
+        launch_arguments={'use_sim_time': 'false'}.items()
+    )
+    
+    # Joint State Publisher
+    node_joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        parameters=[{'use_sim_time': False}]
+    )
+
+    # RViz Config Path
+    rviz_config_path = os.path.join(
+        get_package_share_directory(package_name),
+        'rviz',
+        'localized.rviz'
+    )
 
     # --- 3. RTAB-Map (Mapping Mode) ---
     rtabmap = IncludeLaunchDescription(
@@ -63,19 +85,17 @@ def generate_launch_description():
         launch_arguments={
             'database_path': database_full_path,
             'localization': 'false',
-            'args': (
-                '--delete_db_on_start '
-                '--Mem/IncrementalMemory true '
-                '--RGBD/NeighborLinkRefining true '
-                '--Vis/MinInliers 15 '
-                # '--RGBD/TagHasConstantSize true '
-                # '--Landmarks/FromTags true '
-                '--RGBD/OptimizeMaxError 10.0 '
+            'args': [
+                '--delete_db_on_start ',
+                '--Mem/IncrementalMemory true ',
+                '--RGBD/NeighborLinkRefining true ',
+                '--Vis/MinInliers 15 ',
+                '--RGBD/OptimizeMaxError 10.0 ',
                 '--Rtabmap/DetectionRate 1 '
-            ),
+            ],
             'approx_sync': 'true',
             'approx_sync_max_interval': '0.05',
-            'frame_id': 'base_footprint',
+            'frame_id': 'base_link',
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
@@ -91,9 +111,16 @@ def generate_launch_description():
         }.items()
     )
 
+    # --- 4. Launch Description Assembly ---
     return LaunchDescription([
         floor_arg,
         db_name_arg,
-        # apriltag_node,
+        
+        # รัน Node พื้นฐานทันที
+        realsense,
+        rsp,
+        node_joint_state_publisher,
+        
+        # หน่วงเวลา RTAB-Map 5 วินาทีเพื่อให้ Camera/TF พร้อมก่อน
         TimerAction(period=5.0, actions=[rtabmap]),
     ])

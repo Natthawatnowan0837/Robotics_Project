@@ -74,5 +74,4 @@ void pressure();
 void tcaSelect(uint8_t i);
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time);
 void error_loop();
-void calibrateSensors();
 #endif

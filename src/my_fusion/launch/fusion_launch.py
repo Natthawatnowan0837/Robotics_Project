@@ -38,19 +38,6 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'false'}.items()
     )
 
-    odom_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory(package_name), 'launch', 'odom_launch.py'
-        )]), 
-        launch_arguments={'use_sim_time': 'false'}.items()
-    )
-
-    # odometry_test_node = Node(
-    #     package=package_name,
-    #     executable='odometry_filtered', # ตรวจสอบชื่อ executable ใน setup.py ให้ดี (ห้ามมีช่องว่างท้ายชื่อ)
-    #     name='odometry_filtered_test',
-    #     output='screen'
-    # )
     # pid_node = Node(
     #     package='my_control',
     #     executable='pid_parameters',
@@ -63,8 +50,6 @@ def generate_launch_description():
         esp32_manager_node,
         encoders_node,
         imu_node,
-        odom_launch,
         ekf_launch,
         # pid_node,
-        # odometry_test_node
     ])

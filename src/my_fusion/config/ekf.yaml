@@ -2,38 +2,36 @@ ekf_filter_node:
   ros__parameters:
     frequency: 30.0
     sensor_timeout: 0.1
-    two_d_mode: true
+    two_d_mode: true        # บังคับให้คำนวณเฉพาะในระนาบ 2D (X, Y, Yaw)
     publish_tf: true
 
-    map_frame: map              # สำหรับอนาคตที่มี AprilTag/SLAM
-    odom_frame: odom            # เฟรมหลักของการทำ Fusion
-    base_link_frame: base_footprint # ตัวหุ่นยนต์
-    world_frame: odom           # ในขั้นตอนนี้ให้ Localize ในเฟรม odom
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
 
     # 1. ข้อมูลจาก Encoder (Wheel Odometry)
     odom0: /odom
     odom0_config: [true,  true,  false, # x, y, z
                    false, false, false, # roll, pitch, yaw
                    true,  false, false, # vx, vy, vz
-                   false, false, true,  # vroll, vpitch, vyaw (ใช้ Angular Z)
+                   false, false, false, # vroll, vpitch, vyaw 
                    false, false, false]
+    odom0_queue_size: 10
     odom0_relative: false
+    odom0_differential: false
 
-    # 2. ข้อมูลจาก Realsense (Visual Odometry)
-    odom1: /visual_odom
-    odom1_config: [true,  true,  false,
-                   false, false, false,
-                   true,  true,  false, # vx, vy
-                   false, false, false,
-                   false, false, false]
-    odom1_relative: true
-
-    # 3. ข้อมูลจาก MPU6050 (IMU)
+    # 2. ข้อมูลจาก MPU6050 (IMU)
     imu0: /imu/data_standard
-    imu0_config: [false, false, false,
-                  false, false, true,   # ใช้ Yaw (Orientation)
-                  false, false, false,
-                  false, false, true,   # ใช้ Angular Velocity Z
-                  false, false, false]
-    imu0_relative: true
+    # แก้ไข imu0_config: เน้นรับค่า Orientation และ Angular Velocity
+    imu0_config: [false, false, false, # x, y, z
+                  false, false, true,  # roll, pitch, yaw (เอาเฉพาะ Yaw)
+                  false, false, false, # vx, vy, vz
+                  false, false, true,  # vroll, vpitch, vyaw (เอาเฉพาะ angular velocity แกน Z)
+                  false, false, false] # ax, ay, az
+    imu0_queue_size: 10
+    
+    # การตั้งค่าแนะนำเพิ่มเติมสำหรับ IMU
+    imu0_relative: true                # เริ่มนับมุม 0 ใหม่เมื่อ Reset หุ่น (ช่วยลดปัญหามุมกระโดดตอนเริ่ม)
+    imu0_differential: false           # ใช้ค่า Absolute Orientation จาก Filter ภายใน IMU
     imu0_remove_gravitational_acceleration: true

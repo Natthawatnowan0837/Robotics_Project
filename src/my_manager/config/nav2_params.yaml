@@ -118,18 +118,19 @@ controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 3.14
+      # ปรับจาก 3.14 เป็นค่าที่น้อยลง เช่น 0.1 หรือ 0.15 เรเดียน (ประมาณ 5-8 องศา)
+      yaw_goal_tolerance: 0.1
       
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       
-      max_vel_x: 0.3          # ความเร็วสูงสุดที่เราต้องการ
-      max_speed_xy: 0.3
-      max_vel_theta: 0.45       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
+      max_vel_x: 0.25          # ความเร็วสูงสุดที่เราต้องการ
+      max_speed_xy: 0.25
+      max_vel_theta: 0.4       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
       min_vel_x: 0.0
       min_speed_xy: 0.0
-      min_speed_theta: 0.3     
+      min_speed_theta: 0.0     
       
       # ความเร่งใน DWB ควรจะ "น้อยกว่า" หรือ "เท่ากับ" Smoother
       acc_lim_x: 0.5           # ออกตัวนิ่มๆ (ลดจาก 1.0)
@@ -164,7 +165,7 @@ controller_server:
       GoalAlign.forward_point_distance: 0.1
       PathDist.scale: 12.0 #สั่งให้หุ่นยนต์ "เกาะเส้นพาธ"
       GoalDist.scale: 12.0 #สั่งให้หุ่นยนต์พยายามลดระยะห่างจากจุดหมายให้เร็วที่สุด
-      RotateToGoal.scale: 0.0 #บังคับให้หุ่นหมุนตัวอยู่กับที่เพื่อให้หน้าตรงกับ Goal เมื่อถึงระยะหนึ่ง
+      RotateToGoal.scale: 20.0 #บังคับให้หุ่นหมุนตัวอยู่กับที่เพื่อให้หน้าตรงกับ Goal เมื่อถึงระยะหนึ่ง
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
@@ -259,8 +260,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.3, 0.0, 0.5] 
-    min_velocity: [-0.3, 0.0, -0.5] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
+    max_velocity: [0.25, 0.0, 0.4] 
+    min_velocity: [-0.25, 0.0, -0.4] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
     
     # ค่าความเร่งที่ยอมให้เกิดขึ้น (ควรมาก5ว่า DWB ประมาณ 20-50%)
     # เพื่อให้ Smoother ไม่ไปหน่วงการตัดสิน5จของ Planner จนเกินไป

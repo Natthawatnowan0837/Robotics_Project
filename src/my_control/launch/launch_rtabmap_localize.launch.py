@@ -1,67 +1,43 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, TimerAction, DeclareLaunchArgument, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 def generate_launch_description():
-    # เปลี่ยนเป็น my_manager ให้ตรงกับที่ใช้รันจริง
+    # --- 0. Config & Paths ---
     package_name = 'my_manager' 
-
-    apriltag_config = os.path.join(
-        get_package_share_directory(package_name),
-        'config',
-        'apriltag.yaml'
-    )
+    home_directory = os.path.expanduser('~')
     
-    rviz_config_path = os.path.join(
-        get_package_share_directory(package_name),
-        'rviz',
-        'localized.rviz'
-    )
+    # กำหนด Path พื้นฐานสำหรับ Maps
+    # แนะนำ: ใช้ PathJoinSubstitution จะปลอดภัยกว่าการต่อ String เองใน Python
+    src_maps_path = os.path.join(home_directory, 'Robotics_Project/src/my_manager/maps')
 
-    imu_filter = Node(
-        package='imu_filter_madgwick',
-        executable='imu_filter_madgwick_node',
-        name='imu_filter',
-        parameters=[{
-            'use_mag': False,
-            'publish_tf': False,
-            'world_frame': 'enu'
-        }],
-        remappings=[
-            ('/imu/data_raw', '/camera/camera/imu'),
-            ('/imu/data', '/rtabmap/imu')
-        ]
-    )
-
-    # --- 1. Arguments สำหรับเลือก Floor และชื่อไฟล์ ---
+    # --- 1. Arguments ---
     floor_arg = DeclareLaunchArgument(
         'floor', default_value='floor1',
         description='ชื่อโฟลเดอร์ชั้น'
     )
     db_name_arg = DeclareLaunchArgument(
-        'db_name', default_value='go',
-        description='ชื่อไฟล์ db (ไม่ต้องใส่ .db)'
+        'db_name', default_value='mapping_run',
+        description='ชื่อไฟล์ database'
     )
 
-    # FIXED: Corrected indentation here
-    home_directory = os.path.expanduser('~')
-    src_maps_path = os.path.join(
-        home_directory, 
-        'Robotics_Project/src/my_manager/maps'
-    )
+    # ดึงค่าจาก Argument
+    floor_val = LaunchConfiguration('floor')
+    db_name_val = LaunchConfiguration('db_name')
 
-    # FIXED: Corrected indentation here
-    # สร้าง Path แบบ Dynamic ไปที่ src
+    # FIXED: ใช้ PythonExpression ที่สะอาดขึ้น หรือใช้ PathJoinSubstitution
+    # การต่อ Path ใน ROS2 Launch ต้องระวังเรื่อง "Substitution" objects
     database_full_path = PythonExpression([
-        f"'{src_maps_path}/' + '", LaunchConfiguration('floor'), 
-        f"/' + '", LaunchConfiguration('db_name'), ".db'"
+        "'", src_maps_path, "/' + '", floor_val, "' + '/' + '", db_name_val, "' + '.db'"
     ])
 
-    # --- 2. Nodes ต่างๆ ---
+    # --- 2. Included Launch Files ---
+    
+    # Realsense
     realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
@@ -75,22 +51,10 @@ def generate_launch_description():
             'enable_accel': 'true',
             'unite_imu_method': '2',
             'enable_sync': 'true',
-            'initial_reset': 'true',
         }.items()
     )
 
-    apriltag_node = Node(
-        package='apriltag_ros',
-        executable='apriltag_node',
-        name='apriltag_node',
-        parameters=[apriltag_config],
-        remappings=[
-            ('image_rect', '/camera/camera/color/image_raw'),
-            ('camera_info', '/camera/camera/color/camera_info'),
-            ('detections', '/detections')
-        ]
-    )
-
+    # Robot State Publisher
     rsp = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('my_control'), 'launch', 'rsp.launch.py'
@@ -98,51 +62,64 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'false'}.items()
     )
     
+    # Joint State Publisher
     node_joint_state_publisher = Node(
         package='joint_state_publisher',
         executable='joint_state_publisher',
         name='joint_state_publisher',
         parameters=[{'use_sim_time': False}]
     )
+
+    # RViz Config Path
+    rviz_config_path = os.path.join(
+        get_package_share_directory(package_name),
+        'rviz',
+        'localized.rviz'
+    )
+
+    # --- 3. RTAB-Map (Mapping Mode) ---
     rtabmap = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([os.path.join(
-                get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
-            )]),
-            launch_arguments={
-                'database_path': database_full_path,
-                'localization': 'true',                 # โหมดใช้งานแผนที่เดิม
-                'args': (
-                    '--Mem/IncrementalMemory false '    # ไม่บันทึกเพิ่ม เพื่อนิ่งและประหยัดทรัพยากร
-                    '--RGBD/NeighborLinkRefining true '
-                    '--Vis/MinInliers 15 '
-                    '--RGBD/TagHasConstantSize true '
-                    '--Landmarks/FromTags true '
-                    '--RGBD/OptimizeMaxError 10.0 '
-                ),
-                'approx_sync': 'true',
-                'approx_sync_max_interval': '0.05',
-                'frame_id': 'base_link',
-                'rgb_topic': '/camera/camera/color/image_raw',
-                'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
-                'camera_info_topic': '/camera/camera/color/camera_info',
-                'tag_topic': '/detections',            
-                'odom_topic': '/odometry/filtered',     # เช็คว่า node EKF รันอยู่
-                'imu_topic': '/rtabmap/imu',            # เช็คให้ตรงกับ imu_filter
-                'wait_imu_to_init': 'true',
-                'qos': '1',
-                'rviz': 'true',
-                'rviz_cfg': rviz_config_path,
-            }.items()
-        )
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('rtabmap_launch'), 'launch', 'rtabmap.launch.py'
+        )]),
+        launch_arguments={
+            'database_path': database_full_path,
+            'localization': 'true',
+            'args': [
+                '--Mem/IncrementalMemory false ',
+                '--RGBD/NeighborLinkRefining true ',
+                '--Vis/MinInliers 15 ',
+                '--RGBD/OptimizeMaxError 10.0 ',
+                '--Rtabmap/DetectionRate 1 '
+            ],
+            'approx_sync': 'true',
+            'approx_sync_max_interval': '0.05',
+            'frame_id': 'base_link',
+            'rgb_topic': '/camera/camera/color/image_raw',
+            'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
+            'camera_info_topic': '/camera/camera/color/camera_info',
+            'tag_topic': '/detections',            
+            'odom_topic': '/odometry/filtered',   
+            'imu_topic': '/imu/data_standard',
+            'odom_frame_id': 'odom',
+            'publish_tf_map': 'true',
+            'wait_imu_to_init': 'true',
+            'qos': '1',
+            'rviz': 'true',
+            'rviz_cfg': rviz_config_path,
+        }.items()
+    )
 
-
+    # --- 4. Launch Description Assembly ---
     return LaunchDescription([
         floor_arg,
         db_name_arg,
-        imu_filter,
+        
+        # รัน Node พื้นฐานทันที
         realsense,
-        apriltag_node,
         rsp,
         node_joint_state_publisher,
-        TimerAction(period=3.0, actions=[rtabmap]),
+        
+        # หน่วงเวลา RTAB-Map 5 วินาทีเพื่อให้ Camera/TF พร้อมก่อน
+        TimerAction(period=5.0, actions=[rtabmap]),
     ])

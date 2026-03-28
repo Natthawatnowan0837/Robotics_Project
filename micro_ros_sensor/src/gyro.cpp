@@ -1,127 +1,78 @@
-#include "main.h" // ตรวจสอบว่ามี Library Adafruit_MPU6050, Adafruit_Sensor และ Wire
+#include "main.h" 
 
 // --- [ การตั้งค่าตัวแปร IMU ] ---
 Adafruit_MPU6050 mpuBody;
 Adafruit_MPU6050 mpuPlatform;
 
-#define GYRO_CAL_SAMPLES 200 
-#define ALPHA_PLAT 0.1f       // Low-pass Filter สำหรับ Platform
-#define COMP_FILTER_GAIN 0.96f // Complementary Filter (0.96 เชื่อ Gyro, 0.04 เชื่อ Accel)
+#define ALPHA_PLAT 0.1f       
+#define COMP_FILTER_GAIN 0.96f // 0.96 เชื่อ Gyro, 0.04 เชื่อ Accel
 
-// --- [ ตัวแปรเก็บค่ามุม (Filtered & Integration) ] ---
+// --- [ ตัวแปรเก็บค่ามุม ] ---
 float bodyRoll = 0, bodyPitch = 0, bodyYaw = 0;
-float anglePlatformX = 0, anglePlatformY = 0;
-float angleBodyX = 0, angleBodyY = 0;
-
-// --- [ ตัวแปรสำหรับ Calibration (Offset/Bias) ] ---
-float biasBodyX = 0, biasBodyY = 0, biasBodyZ = 0; 
-float offsetBodyRoll = 0, offsetBodyPitch = 0; // เพิ่มสำหรับ Body
-float offsetPlatX = 0, offsetPlatY = 0;        // สำหรับ Platform
+float anglePlatformY = 0; 
 
 unsigned long lastTime = 0;
 
-// --- [ ฟังก์ชัน Set ศูนย์ (Calibration) ] ---
-void calibrateSensors() {
-    Serial.println(">>> Calibrating ALL IMUs... Keep the robot STEADY! <<<");
-    sensors_event_t a, g, temp;
-    
-    float sumBX = 0, sumBY = 0, sumBZ = 0;
-    float sumBodyRoll = 0, sumBodyPitch = 0;
-    float sumAngPX = 0, sumAngPY = 0;
+// *** หมายเหตุ: ยกเลิก calibrateSensors() แล้ว ***
+// ระบบจะใช้ค่าจาก Accelerometer ตั้งต้นเป็นมุมปัจจุบันทันทีเมื่อเริ่มทำงาน
 
-    for (int i = 0; i < GYRO_CAL_SAMPLES; i++) {
-        // 1. อ่านค่าจาก Body (TCA 0)
-        tcaSelect(0);
-        mpuBody.getEvent(&a, &g, &temp);
-        // เก็บค่า Gyro สำหรับ Bias
-        sumBX += g.gyro.x; 
-        sumBY += g.gyro.y;
-        sumBZ += g.gyro.z;
-        // เก็บค่า Accel สำหรับหาความเอียงเริ่มต้น (Static Offset)
-        sumBodyRoll  += atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI;
-        sumBodyPitch += atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI;
-
-        // 2. อ่านค่าจาก Platform (TCA 1)
-        tcaSelect(1);
-        mpuPlatform.getEvent(&a, &g, &temp);
-        sumAngPX += atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI;
-        sumAngPY += atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI;
-        
-        delay(5); // หน่วงเวลาสั้นๆ เพื่อให้ได้ข้อมูลที่หลากหลายขึ้น
-    }
-
-    // คำนวณค่าเฉลี่ย Bias ของ Gyro Body (หน่วย rad/s)
-    biasBodyX = sumBX / (float)GYRO_CAL_SAMPLES;
-    biasBodyY = sumBY / (float)GYRO_CAL_SAMPLES;
-    biasBodyZ = sumBZ / (float)GYRO_CAL_SAMPLES;
-
-    // คำนวณค่าเฉลี่ย Offset มุมของ Body (องศา)
-    offsetBodyRoll  = sumBodyRoll / (float)GYRO_CAL_SAMPLES;
-    offsetBodyPitch = sumBodyPitch / (float)GYRO_CAL_SAMPLES;
-
-    // คำนวณค่าเฉลี่ย Offset มุมของ Platform (องศา)
-    offsetPlatX = sumAngPX / (float)GYRO_CAL_SAMPLES;
-    offsetPlatY = sumAngPY / (float)GYRO_CAL_SAMPLES;
-
-    // รีเซ็ตค่าตัวแปรมุมให้เป็นศูนย์ทันที
-    bodyRoll = 0; bodyPitch = 0; bodyYaw = 0;
-    anglePlatformX = 0; anglePlatformY = 0;
-    
-    lastTime = millis();
-    Serial.println("Calibration Done! All systems ZEROED.");
-}
-
-// --- [ ฟังก์ชันหลักสำหรับอ่านและคำนวณมุม ] ---
 void Gyro() {
     sensors_event_t a, g, temp;
     
-    // 1. คำนวณ Delta Time (dt)
     unsigned long currentTime = millis();
     float dt = (currentTime - lastTime) / 1000.0f; 
-    if (dt <= 0) dt = 0.001f; 
+    
+    if (lastTime == 0 || dt <= 0 || dt > 0.5f) {
+        dt = 0.01f; 
+    }
     lastTime = currentTime;
 
-    // --- [ 2. ดึงข้อมูล BODY (TCA 0) ] ---
+    // --- [ 1. อ่านข้อมูลจาก Body MPU (TCA 0) ] ---
     tcaSelect(0);
-    mpuBody.getEvent(&a, &g, &temp);
-    
-    // คำนวณมุมดิบจาก Accelerometer และหักลบ Offset
-    float accRollBody  = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetBodyRoll;
-    float accPitchBody = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetBodyPitch;
+    if (mpuBody.getEvent(&a, &g, &temp)) {
+        
+        // คำนวณมุมจาก Accelerometer (Radian)
+        float accRollBodyRad  = atan2(a.acceleration.y, a.acceleration.z);
+        float accPitchBodyRad = atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z));
 
-    // A. การคำนวณแบบเดิม (Complementary Filter) สำหรับ EKF
-    float gyroX_deg = (g.gyro.x - biasBodyX) * 180.0f / PI;
-    float gyroY_deg = (g.gyro.y - biasBodyY) * 180.0f / PI;
-    float gyroZ_deg = (g.gyro.z - biasBodyZ) * 180.0f / PI;
+        // ค่า Gyro ดิบ (rad/s)
+        float gyroX_rads = g.gyro.x;
+        float gyroY_rads = g.gyro.y;
+        float gyroZ_rads = g.gyro.z;
 
-    bodyRoll  = COMP_FILTER_GAIN * (bodyRoll + gyroX_deg * dt) + (1.0f - COMP_FILTER_GAIN) * accRollBody;
-    bodyPitch = COMP_FILTER_GAIN * (bodyPitch + gyroY_deg * dt) + (1.0f - COMP_FILTER_GAIN) * accPitchBody;
-    bodyYaw  += gyroZ_deg * dt; 
+        // Complementary Filter (หน่วย Radian)
+        bodyRoll  = COMP_FILTER_GAIN * (bodyRoll + gyroX_rads * dt) + (1.0f - COMP_FILTER_GAIN) * accRollBodyRad;
+        bodyPitch = COMP_FILTER_GAIN * (bodyPitch + gyroY_rads * dt) + (1.0f - COMP_FILTER_GAIN) * accPitchBodyRad;
+        bodyYaw  += gyroZ_rads * dt; 
 
-    // B. การคำนวณแบบใหม่ (Low-pass Filter) เหมือนฝั่ง Platform
-    // ใช้ ALPHA_PLAT หรือจะตั้ง ALPHA_BODY ใหม่ก็ได้ครับ
-    angleBodyX = (ALPHA_PLAT * accRollBody) + ((1.0f - ALPHA_PLAT) * angleBodyX);
-    angleBodyY = (ALPHA_PLAT * accPitchBody) + ((1.0f - ALPHA_PLAT) * angleBodyY);
+        // --- เพิ่มส่วนนี้: แปลง bodyPitch เป็นองศาสำหรับ angleBodyY ---
+        float angleBodyY_deg = bodyPitch * 180.0f / PI;
 
-    // --- [ 3. ดึงข้อมูล PLATFORM (TCA 1) ] ---
+        // --- [ ส่งข้อมูลลง msg_sensors ] ---
+        msg_sensors.data.data[0] = bodyRoll;      // rad
+        msg_sensors.data.data[1] = bodyPitch;     // rad
+        msg_sensors.data.data[2] = bodyYaw;       // rad
+        msg_sensors.data.data[3] = gyroX_rads;    // rad/s
+        msg_sensors.data.data[4] = gyroY_rads;    // rad/s
+        msg_sensors.data.data[5] = gyroZ_rads;    // rad/s
+        
+        // ใส่ค่ามุมของตัวหุ่น (หน่วยองศา) ในช่องที่ 6
+        msg_sensors.data.data[6] = angleBodyY_deg; 
+    }
+
+    // --- [ 2. อ่านข้อมูลจาก Platform MPU (TCA 1) ] ---
     tcaSelect(1);
-    mpuPlatform.getEvent(&a, &g, &temp);
+    if (mpuPlatform.getEvent(&a, &g, &temp)) {
+        // คำนวณมุม Pitch ของ Platform (Radian)
+        float accPitchPlatRad = atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z));
+        
+        // แปลงเป็นองศา
+        float accPitchPlatDeg = accPitchPlatRad * 180.0f / PI;
 
-    float rawPlatX = (atan2(a.acceleration.y, a.acceleration.z) * 180.0f / PI) - offsetPlatX;
-    float rawPlatY = (atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0f / PI) - offsetPlatY;
+        // Low-pass filter สำหรับ Platform
+        anglePlatformY = (ALPHA_PLAT * accPitchPlatDeg) + ((1.0f - ALPHA_PLAT) * anglePlatformY);
 
-    anglePlatformX = (ALPHA_PLAT * rawPlatX) + ((1.0f - ALPHA_PLAT) * anglePlatformX);
-    anglePlatformY = (ALPHA_PLAT * rawPlatY) + ((1.0f - ALPHA_PLAT) * anglePlatformY);
-
-    // --- [ 4. เก็บข้อมูลลง msg_sensors ] ---
-    msg_sensors.data.data[0] = bodyRoll;       
-    msg_sensors.data.data[1] = bodyPitch;      
-    msg_sensors.data.data[2] = bodyYaw;        
-    msg_sensors.data.data[3] = gyroX_deg;      
-    msg_sensors.data.data[4] = gyroY_deg;      
-    msg_sensors.data.data[5] = gyroZ_deg;      
-    
-    // แก้ไขตามที่สั่ง: เปลี่ยนจาก PlatformX เป็น BodyY (แบบ Low-pass)
-    msg_sensors.data.data[6] = angleBodyY;     
-    msg_sensors.data.data[7] = anglePlatformY; 
+        // ใส่ค่ามุมของฐานรอง (หน่วยองศา) ในช่องที่ 7
+        msg_sensors.data.data[7] = anglePlatformY; 
+    }
 }

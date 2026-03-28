@@ -86,7 +86,6 @@ void setup() {
     tcaSelect(6); ms5611.begin();
     delay(10);
     // tcaSelect(6); pressure.begin();
-    calibrateSensors();
     allocator = rcl_get_default_allocator();
 
     // --- การจอง Memory สำหรับ MultiArray (สำคัญมาก) ---
