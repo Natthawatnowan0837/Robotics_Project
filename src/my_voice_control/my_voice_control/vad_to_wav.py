@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String # เพิ่ม String
 import torch
 import numpy as np
 import pyaudio
@@ -14,16 +14,19 @@ class VoiceCaptureNode(Node):
         super().__init__('vad_to_wav')
         
         # --- Config ---
-        self.SILENCE_THRESHOLD = 0.6 # ปรับให้อ่อนลงหน่อยเผื่อเสียงเบา
+        self.SILENCE_THRESHOLD = 0.6 
         self.OUTPUT_FILENAME = "my_command.wav"
         
-        # [NEW] ระบบ State Control ผ่าน Topic
-        # 1. รับคำสั่ง: "ให้เริ่มฟังได้" (จาก Whisper หรือหุ่นยนต์ตอนพูดจบ)
+        # --- [SYSTEM CONTROL] ---
+        # รับ Bool: True เพื่อปลดล็อกให้เริ่มฟังใหม่
         self.sub_listen = self.create_subscription(Bool, '/listen', self.listen_callback, 10)
-        self.can_record = False # เริ่มต้นยังไม่ฟัง จนกว่าจะได้รับคำสั่งแรก
-
-        # 2. ส่งสัญญาณ: "อัดเสร็จแล้วนะ" (บอก Whisper ให้เริ่มทำงาน)
-        self.pub_state = self.create_publisher(Bool, '/voice_state', 10)
+        
+        # ส่ง String: "process" เมื่ออัดเสียงเสร็จและบันทึกไฟล์เรียบร้อย
+        self.pub_state = self.create_publisher(String, '/voice_state', 10)
+        
+        # เริ่มต้น: ให้เปิดฟังทันทีในครั้งแรกที่รัน (First Start)
+        self.can_record = True 
+        self.get_logger().info("🎤 VAD Node Ready. [FIRST RUN]: Automatically Listening...")
 
         # --- Load VAD Model ---
         self.model, _ = torch.hub.load(repo_or_dir='snakers4/silero-vad', model='silero_vad', trust_repo=True)
@@ -39,25 +42,25 @@ class VoiceCaptureNode(Node):
         self.pre_buffer = deque(maxlen=int(0.5 * 16000 / 512)) # 0.5s pre-buffer
 
         self.timer = self.create_timer(0.03, self.process_audio)
-        self.get_logger().info("🎤 VAD Node Ready. Waiting for /listen = True")
 
     def listen_callback(self, msg):
-        if msg.data:
+        """ รับสัญญาณปลดล็อกไมค์ """
+        if msg.data: # ถ้าได้รับ True
             if not self.can_record:
-                # --- [ADD] Flush Mic Buffer ---
-                # อ่านข้อมูลค้างเก่าทิ้งไปให้หมดก่อนเริ่มฟังใหม่
+                # เคลียร์ Buffer เก่าที่อาจค้างอยู่ใน Mic Stream
                 try:
                     while self.stream.get_read_available() > 0:
                         self.stream.read(self.stream.get_read_available(), exception_on_overflow=False)
                 except:
                     pass
                 
-                self.get_logger().info("🔓 Mic Unlocked: Buffer Flushed & Listening...")
+                self.get_logger().info("🔓 Mic Unlocked: Waiting for voice...")
                 self.reset_state() 
                 self.can_record = True
         else:
+            # ถ้าได้รับ False ให้หยุดฟังทันที
             self.can_record = False
-            self.get_logger().info("🔒 Mic Locked: Stopped Listening")
+            self.get_logger().info("🔒 Mic Locked manually")
 
     def process_audio(self):
         if not self.can_record:
@@ -72,7 +75,7 @@ class VoiceCaptureNode(Node):
 
             if speech_prob > self.SILENCE_THRESHOLD:
                 if not self.is_speaking:
-                    self.get_logger().info("🔴 Started Recording...")
+                    self.get_logger().info("🔴 Detected Voice: Recording...")
                     self.is_speaking = True
                     self.audio_buffer.extend(self.pre_buffer)
                 self.silence_counter = 0 
@@ -81,7 +84,7 @@ class VoiceCaptureNode(Node):
                 if self.is_speaking:
                     self.audio_buffer.append(data)
                     self.silence_counter += 1
-                    # ถ้าเงียบเกิน 0.8 วินาที (ประมาณ 25 chunks)
+                    # เงียบเกิน 0.8 วินาที
                     if self.silence_counter > 25:
                         self.save_and_signal()
                 else:
@@ -90,8 +93,8 @@ class VoiceCaptureNode(Node):
             self.get_logger().error(f"Mic Error: {e}")
 
     def save_and_signal(self):
+        """ บันทึกไฟล์, Lock ไมค์ และส่งสัญญาณไป Process """
         if len(self.audio_buffer) > 20:
-            # 1. บันทึกไฟล์
             temp_filename = "recording_temp.wav"
             wf = wave.open(temp_filename, 'wb')
             wf.setnchannels(1)
@@ -101,14 +104,14 @@ class VoiceCaptureNode(Node):
             wf.close()
             os.replace(temp_filename, self.OUTPUT_FILENAME)
             
-            self.get_logger().info(f"💾 Saved. Signaling Whisper...")
+            self.get_logger().info(f"💾 Saved {self.OUTPUT_FILENAME}. Locking Mic...")
 
-            # 2. ปิดไมค์ตัวเอง (Lock) เพื่อไม่ให้บันทึกซ้อน
+            # --- LOCK ไมค์ทันทีเพื่อรอการประมวลผลจาก Node อื่น ---
             self.can_record = False 
 
-            # 3. ส่ง State ไปบอก Whisper
-            state_msg = Bool()
-            state_msg.data = True
+            # --- ส่ง Topic เป็น String "process" ---
+            state_msg = String()
+            state_msg.data = "process"
             self.pub_state.publish(state_msg)
             
         self.reset_state()

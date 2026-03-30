@@ -16,16 +16,18 @@ class RotationControlNode(Node):
         self.group = ReentrantCallbackGroup()
 
         # --- [ Parameters ] ---
-        self.declare_parameter('kp_yaw', 0.45)
-        self.declare_parameter('max_ang_vel', 0.5)
+        self.declare_parameter('kp_yaw', 0.6)
+        self.declare_parameter('max_ang_vel', 0.6)
         self.declare_parameter('min_ang_vel', 0.15)
-        self.declare_parameter('tolerance', 1.2)
+        self.declare_parameter('linear_speed', 0.25) 
+        self.declare_parameter('tolerance', 1.5) # ปรับให้กว้างขึ้นนิดนึงเพื่อความเร็ว
 
         # Variables
         self.current_yaw_deg = 0.0
-        self.target_yaw_deg = 0.0
+        self.start_yaw_deg = 0.0   # ใช้เก็บค่ามุม "ก่อนเริ่มหมุน" เพื่อใช้เป็นจุด Reset 0
+        self.target_relative_deg = 0.0 
         self.is_rotating = False
-        self.rotate_dir = 0 
+        self.is_moving_fwd = False 
 
         # --- [ QoS & Sub/Pub/Srv ] ---
         qos_profile = QoSProfile(
@@ -33,16 +35,14 @@ class RotationControlNode(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
-        self.odom_sub = self.create_subscription(Odometry, '/odom/filtered', self.odom_callback, qos_profile, callback_group=self.group)
+        self.odom_sub = self.create_subscription(
+            Odometry, '/odom/filtered', self.odom_callback, qos_profile, callback_group=self.group)
         self.cmd_pub = self.create_publisher(Twist, 'cmd_vel_rotation', 10)
+        self.srv = self.create_service(
+            SequenceCmd, 'rotate_service', self.handle_rotate_service, callback_group=self.group)
         
-        # Service Server
-        self.srv = self.create_service(SequenceCmd, 'rotate_service', self.handle_rotate_service, callback_group=self.group)
-        
-        # Control Loop Timer
         self.create_timer(0.05, self.control_loop, callback_group=self.group)
-
-        self.get_logger().info("🚀 Rotation Control (With Emergency STOP) Started!")
+        self.get_logger().info("🚀 Relative Rotation Mode: Resetting to 0 before every turn.")
 
     def quaternion_to_euler(self, q):
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
@@ -55,105 +55,89 @@ class RotationControlNode(Node):
     def handle_rotate_service(self, request, response):
         cmd = request.state.lower().strip()
         
-        # --- [ ส่วนที่เพิ่มเข้ามา: ตรวจสอบคำสั่ง STOP ] ---
         if cmd == 'stop':
-            self.get_logger().warn("🛑 STOP command received! Halting rotation immediately.")
-            self.is_rotating = False  # หยุด loop การทำงานใน service
-            self.stop_robot()        # ส่งความเร็ว 0 ทันที
+            self.is_rotating = False
+            self.is_moving_fwd = False 
+            self.stop_robot()
             response.status = "STOPPED"
-            response.angle = self.current_yaw_deg
             return response
-        # ----------------------------------------------
 
-        angle_to_turn = 0.0
+        if cmd == 'fwd':
+            self.get_logger().info("🏃 FWD 0.5s")
+            self.is_moving_fwd = True
+            msg = Twist(); msg.linear.x = self.get_parameter('linear_speed').value
+            self.cmd_pub.publish(msg)
+            time.sleep(0.5)
+            self.stop_robot()
+            self.is_moving_fwd = False
+            response.status = "SUCCESS"
+            return response
+
+        # --- ส่วนการหมุนแบบ Reset 0 ---
+        # 1. บันทึกค่ามุมปัจจุบันไว้เป็นจุดเริ่ม (เสมือนเป็น 0 องศา)
+        self.start_yaw_deg = self.current_yaw_deg
         
-        if 'left' in cmd:
-            self.rotate_dir = 1 
-        elif 'right' in cmd:
-            self.rotate_dir = -1
+        # 2. กำหนดมุมที่จะหมุนจากจุดปัจจุบัน
+        if 'left 90' in cmd: self.target_relative_deg = 90.0
+        elif 'right 90' in cmd: self.target_relative_deg = -90.0
+        elif 'left 180' in cmd: self.target_relative_deg = 180.0
+        elif 'right 180' in cmd: self.target_relative_deg = -180.0
         else:
-            self.rotate_dir = 0 
-
-        if '90' in cmd: angle_to_turn = 90.0 * self.rotate_dir
-        elif '180' in cmd: angle_to_turn = 180.0 * self.rotate_dir
-        else:
-            self.get_logger().error(f"❌ Unknown Command: {cmd}")
             response.status = "FAILED"
             return response
 
-        start_angle = self.current_yaw_deg
-        self.target_yaw_deg = start_angle + angle_to_turn
-        
-        # Normalize Target
-        while self.target_yaw_deg > 180: self.target_yaw_deg -= 360
-        while self.target_yaw_deg < -180: self.target_yaw_deg += 360
-
         self.is_rotating = True
-        self.get_logger().info(f"🔄 ROTATING {cmd.upper()} | From: {start_angle:.2f}° | Target: {self.target_yaw_deg:.2f}°")
+        self.get_logger().info(f"🔄 Resetting reference to 0. Rotating {cmd.upper()}...")
 
-        # รอจนกว่าจะหมุนเสร็จ หรือถูกสั่ง STOP (is_rotating กลายเป็น False)
         while self.is_rotating and rclpy.ok():
             time.sleep(0.05)
 
-        response.status = "SUCCESS" if not self.is_rotating else "INTERRUPTED"
-        response.angle = self.current_yaw_deg
+        response.status = "SUCCESS"
         return response
 
     def stop_robot(self):
-        """ฟังก์ชันส่งความเร็วเป็น 0 ทันที"""
-        msg = Twist()
-        self.cmd_pub.publish(msg)
+        self.cmd_pub.publish(Twist())
 
     def control_loop(self):
-        if not self.is_rotating:
+        if not self.is_rotating or self.is_moving_fwd:
             return
 
-        error = self.target_yaw_deg - self.current_yaw_deg
+        # คำนวณหา "มุมที่หมุนมาแล้วจริงๆ" นับจากจุดเริ่ม (Relative Yaw)
+        relative_current_yaw = self.current_yaw_deg - self.start_yaw_deg
         
-        # ปรับจูน Error ตามทิศทางที่บังคับ
-        if self.rotate_dir == -1 and error > 0:
-            error -= 360
-        elif self.rotate_dir == 1 and error < 0:
-            error += 360
-        elif self.rotate_dir == 0:
-            while error > 180: error -= 360
-            while error < -180: error += 360
+        #จัดการ Wrap Angle ให้การลบกันยังอยู่ในช่วง -180 ถึง 180
+        if relative_current_yaw > 180: relative_current_yaw -= 360
+        elif relative_current_yaw < -180: relative_current_yaw += 360
 
-        tolerance = self.get_parameter('tolerance').value
-
-        # เช็คว่าถึงเป้าหมายหรือยัง
-        if abs(error) < tolerance:
+        error = self.target_relative_deg - relative_current_yaw
+        
+        # จัดการ Shortest Path
+        if error > 180: error -= 360
+        elif error < -180: error += 360
+        
+        if abs(error) < self.get_parameter('tolerance').value:
             self.stop_robot()
             self.is_rotating = False
-            self.get_logger().info(f"🎯 REACHED TARGET! Final Angle: {self.current_yaw_deg:.2f}°")
             return
 
-        # PID อย่างง่าย (P-Control)
-        kp = self.get_parameter('kp_yaw').value
+        speed = error * self.get_parameter('kp_yaw').value
         max_v = self.get_parameter('max_ang_vel').value
         min_v = self.get_parameter('min_ang_vel').value
-
-        speed = error * kp
         
         if abs(speed) > max_v: speed = max_v if speed > 0 else -max_v
         if abs(speed) < min_v: speed = min_v if speed > 0 else -min_v
 
-        msg = Twist()
-        msg.angular.z = speed
+        msg = Twist(); msg.angular.z = speed
         self.cmd_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = RotationControlNode()
     executor = MultiThreadedExecutor()
+    node = RotationControlNode()
     executor.add_node(node)
-    try:
-        executor.spin()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    try: executor.spin()
+    except KeyboardInterrupt: pass
+    finally: node.destroy_node(); rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

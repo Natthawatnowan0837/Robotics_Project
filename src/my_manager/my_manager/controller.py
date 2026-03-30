@@ -1,134 +1,146 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray  # แก้ไข import ให้ถูกต้อง
 from pynput import keyboard
+import math
 
-class KeyboardControllerNode(Node):
+class KeyboardRotationNode(Node):
     def __init__(self):
-        super().__init__('keyboard_controller_node')
-        
-        # --- [ Configuration ] ---
-        self.declare_parameter('linear_speed', 0.25)
-        self.declare_parameter('angular_speed', 0.6)
-        self.declare_parameter('arm_speed', 0.5)
-        
-        self.linear_max = self.get_parameter('linear_speed').value
-        self.angular_max = self.get_parameter('angular_speed').value
-        self.arm_max = self.get_parameter('arm_speed').value
+        super().__init__('keyboard_rotation_node')
+        self.group = ReentrantCallbackGroup()
 
-        # State management
-        self.current_body_angle = 0.0
-        self.target_angle = None
-        self.is_auto_turning = False
-        self.pressed_keys = set()
+        # --- [ Parameters ] ---
+        # ปรับค่าเหล่านี้เพื่อความนุ่มนวลในการหมุน
+        self.declare_parameter('kp_yaw', 0.6)         # ความเร็วแปรผันตาม Error
+        self.declare_parameter('max_ang_vel', 0.7)    # ความเร็วสูงสุด
+        self.declare_parameter('min_ang_vel', 0.15)   # ความเร็วต่ำสุดกันมอเตอร์ค้าง
+        self.declare_parameter('tolerance', 1.5)      # จุดยอมรับการหยุด (องศา)
 
-        # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel_teleop', 10)
-        self.arm_vel_pub = self.create_publisher(Twist, 'arm_vel', 10)
+        # Variables
+        self.current_yaw_deg = 0.0
+        self.start_yaw_deg = 0.0   
+        self.target_relative_deg = 0.0 
+        self.is_rotating = False
+
+        # --- [ QoS & Sub/Pub ] ---
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+        # รับค่าตำแหน่งจาก Odom
+        self.odom_sub = self.create_subscription(
+            Odometry, '/odom/filtered', self.odom_callback, qos_profile, callback_group=self.group)
         
-        # Subscriber: รับค่าจากเซนเซอร์ตัวที่ 2 (Index 1)
-        self.create_subscription(
-            Float32MultiArray, 
-            '/sensors', 
-            self.angle_callback, 
-            10)
+        # ส่งคำสั่งความเร็ว (เปลี่ยนชื่อ topic ตามหุ่นยนต์ของคุณ เช่น 'cmd_vel')
+        self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        # Keyboard Listener
-        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        # Keyboard Listener (ทำงานใน Thread แยก)
+        self.listener = keyboard.Listener(on_press=self.on_press)
         self.listener.start()
 
-        # Timer (20Hz)
-        self.timer = self.create_timer(0.05, self.control_loop)
+        # Timer สำหรับคำนวณการเคลื่อนที่ (20Hz)
+        self.create_timer(0.05, self.control_loop, callback_group=self.group)
+        
+        self.get_logger().info("🚀 Node Ready!")
+        self.get_logger().info("Press 'q' to Turn Left 90° | 'e' to Turn Right 90° | 'ESC' to Quit")
 
-        self.get_logger().info("--- Keyboard Controller Node Started ---")
-        self.get_logger().info("WASD: Move | QE: Arm | J/L: Auto 90° Turn | ESC: Quit")
+    def quaternion_to_euler(self, q):
+        """ แปลงค่า Quaternion เป็นองศา (Yaw) """
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        return math.degrees(math.atan2(siny_cosp, cosy_cosp))
 
-    def angle_callback(self, msg):
-        """ ฟังก์ชันรับค่าจาก sensor topic """
-        if len(msg.data) >= 2:
-            # เก็บค่าตัวที่ 2 (index 1) ไว้ใช้คำนวณการเลี้ยว
-            self.current_body_angle = msg.data[2]
+    def odom_callback(self, msg):
+        self.current_yaw_deg = self.quaternion_to_euler(msg.pose.pose.orientation)
 
     def on_press(self, key):
+        """ จัดการเมื่อมีการกดปุ่ม """
         try:
             if hasattr(key, 'char'):
-                key_char = key.char.lower()
-                self.pressed_keys.add(key_char)
-                
-                # สั่งเลี้ยวอัตโนมัติเมื่อกด J หรือ L
-                if key_char == 'l' and not self.is_auto_turning:
-                    self.start_auto_turn(-180.0) # เลี้ยวขวา
-                elif key_char == 'j' and not self.is_auto_turning:
-                    self.start_auto_turn(180.0)  # เลี้ยวซ้าย
-        except:
-            pass
+                if key.char == 'q':
+                    self.initiate_rotation(90.0)  # หมุนซ้าย
+                elif key.char == 'e':
+                    self.initiate_rotation(-90.0) # หมุนขวา
+        except Exception as e:
+            self.get_logger().error(f"Error: {e}")
+        
+        if key == keyboard.Key.esc:
+            self.get_logger().info("Shutting down...")
+            rclpy.shutdown()
 
-    def on_release(self, key):
-        try:
-            if hasattr(key, 'char'):
-                char = key.char.lower()
-                if char in self.pressed_keys:
-                    self.pressed_keys.remove(char)
-            if key == keyboard.Key.esc:
-                self.get_logger().info("Exiting on ESC...")
-                rclpy.shutdown()
-        except:
-            pass
-
-    def start_auto_turn(self, angle_offset):
-        """ คำนวณเป้าหมายและเริ่มโหมดเลี้ยวอัตโนมัติ """
-        self.target_angle = self.current_body_angle + angle_offset
-        self.is_auto_turning = True
-        self.get_logger().info(f"Auto Turn Start: Target {self.target_angle:.2f}")
+    def initiate_rotation(self, relative_angle):
+        """ ตั้งค่าเริ่มต้นก่อนเริ่มหมุน """
+        if self.is_rotating:
+            self.get_logger().warn("⚠️ Robot is already rotating!")
+            return
+            
+        self.start_yaw_deg = self.current_yaw_deg
+        self.target_relative_deg = relative_angle
+        self.is_rotating = True
+        self.get_logger().info(f"🔄 Rotating {relative_angle}° from {self.start_yaw_deg:.2f}°")
 
     def control_loop(self):
-        """ Loop หลักในการคำนวณและ Publish คำสั่ง """
-        twist = Twist()
-        arm_twist = Twist()
+        """ ลูปควบคุม PID อย่างง่ายเพื่อหมุนหุ่นยนต์ """
+        if not self.is_rotating:
+            return
 
-        # 1. ระบบเลี้ยวอัตโนมัติ (Autonomous Turn)
-        if self.is_auto_turning:
-            error = self.target_angle - self.current_body_angle
-            
-            # เมื่อใกล้ถึงเป้าหมาย (Tolerance 2 องศา)
-            if abs(error) < 2.0:
-                self.is_auto_turning = False
-                self.target_angle = None
-                self.get_logger().info("Target Reached.")
-            else:
-                # ส่งค่าความเร็วเชิงมุมเพื่อหมุน
-                twist.angular.z = self.angular_max if error > 0 else -self.angular_max
+        # 1. คำนวณหา "ระยะที่หมุนไปแล้ว" เทียบกับจุดเริ่มต้น
+        relative_current_yaw = self.current_yaw_deg - self.start_yaw_deg
         
-        # 2. ระบบควบคุมด้วยมือ (Manual Control) - ทำงานเมื่อไม่ได้เลี้ยวอัตโนมัติ
-        else:
-            if 'w' in self.pressed_keys: twist.linear.x = self.linear_max
-            if 's' in self.pressed_keys: twist.linear.x = -self.linear_max
-            if 'a' in self.pressed_keys: twist.angular.z = self.angular_max
-            if 'd' in self.pressed_keys: twist.angular.z = -self.angular_max
+        # จัดการรอยต่อองศา (Wrapping) เช่น จาก 179 ไป -179
+        if relative_current_yaw > 180: relative_current_yaw -= 360
+        elif relative_current_yaw < -180: relative_current_yaw += 360
 
-        # 3. ระบบควบคุมแขนกล
-        if 'q' in self.pressed_keys: arm_twist.linear.x = self.arm_max
-        if 'e' in self.pressed_keys: arm_twist.linear.x = -self.arm_max
+        # 2. คำนวณ Error (เป้าหมาย - ระยะที่มาถึงแล้ว)
+        error = self.target_relative_deg - relative_current_yaw
+        
+        # จัดการ Wrapping ของ Error อีกครั้งเพื่อหาทิศที่ใกล้ที่สุด
+        if error > 180: error -= 360
+        elif error < -180: error += 360
+        
+        # 3. ตรวจสอบว่าถึงระยะที่ยอมรับได้หรือยัง
+        if abs(error) < self.get_parameter('tolerance').value:
+            self.cmd_pub.publish(Twist()) # ส่งค่า 0 เพื่อหยุด
+            self.is_rotating = False
+            self.get_logger().info("✅ Target Reached")
+            return
 
-        self.cmd_vel_pub.publish(twist)
-        self.arm_vel_pub.publish(arm_twist)
+        # 4. คำนวณความเร็ว (P-Control)
+        kp = self.get_parameter('kp_yaw').value
+        max_v = self.get_parameter('max_ang_vel').value
+        min_v = self.get_parameter('min_ang_vel').value
+
+        speed = error * kp
+        
+        # จำกัดความเร็ว (Saturation)
+        if abs(speed) > max_v: speed = max_v if speed > 0 else -max_v
+        if abs(speed) < min_v: speed = min_v if speed > 0 else -min_v
+
+        msg = Twist()
+        msg.angular.z = speed
+        self.cmd_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = KeyboardControllerNode()
+    node = KeyboardRotationNode()
+    
+    # ใช้ MultiThreadedExecutor เพื่อให้ Subscriber และ Timer ทำงานขนานกันได้
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    
     try:
-        rclpy.spin(node)
+        executor.spin()
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        # สั่งหยุดหุ่นยนต์ก่อนปิดโปรแกรม
-        stop_msg = Twist()
-        node.cmd_vel_pub.publish(stop_msg)
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

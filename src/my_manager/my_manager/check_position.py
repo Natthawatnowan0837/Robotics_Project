@@ -84,7 +84,7 @@ class CheckPositionServer(Node):
 
             # สร้าง Request สั่งหมุน 180
             req = SequenceCmd.Request()
-            req.state = "left180" # คำสั่งหมุน 180 องศา
+            req.state = "left 180"
 
             self.get_logger().info("⏳ Requesting Rotation (180°)... Waiting for completion.")
             

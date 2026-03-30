@@ -7,6 +7,22 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
+    realsense = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
+        )]),
+        launch_arguments={
+            'depth_module.profile': '640,480,15',
+            'rgb_module.profile': '640,480,15',
+            'pointcloud.enable': 'true',
+            'align_depth.enable': 'true',
+            'enable_gyro': 'true',
+            'enable_accel': 'true',
+            'unite_imu_method': '2',
+            'enable_sync': 'true',
+        }.items()
+    )
+
     config_path = os.path.join(
         get_package_share_directory('my_manager'), # เปลี่ยนเป็นชื่อ package คุณ
         'config',
@@ -46,12 +62,18 @@ def generate_launch_description():
         output='screen'
     )
 
-    ekf_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory(package_name), 'launch', 'ekf_launch.py'
-        )]), 
-        launch_arguments={'use_sim_time': 'false'}.items()
-    )
+    pkg_share = get_package_share_directory('my_fusion')
+    ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
+
+        # รันโหนด EKF        
+    ekf = Node(
+            package='robot_localization',
+            executable='ekf_node',
+            name='ekf_filter_node',
+            output='screen',
+            parameters=[ekf_config_path],
+            remappings=[('/odometry/filtered', '/odom/filtered')] 
+        )
 
     pid_node = Node(
         package='my_control',
@@ -62,10 +84,11 @@ def generate_launch_description():
 
     # --- ส่งโหนดทั้งหมดออกไปรัน ---
     return LaunchDescription([
+        realsense,
         esp32_manager_node,
         encoders_node,
         imu_node,
-        ekf_launch,
+        ekf,
         pid_node,
         twist_mux_node
     ])

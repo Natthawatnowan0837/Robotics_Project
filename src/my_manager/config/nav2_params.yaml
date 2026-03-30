@@ -117,20 +117,20 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.3
       # ปรับจาก 3.14 เป็นค่าที่น้อยลง เช่น 0.1 หรือ 0.15 เรเดียน (ประมาณ 5-8 องศา)
-      yaw_goal_tolerance: 0.1
+      yaw_goal_tolerance: 0.7
       
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       
-      max_vel_x: 0.25          # ความเร็วสูงสุดที่เราต้องการ
-      max_speed_xy: 0.25
-      max_vel_theta: 0.4       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
+      max_vel_x: 0.3          # ความเร็วสูงสุดที่เราต้องการ
+      max_speed_xy: 0.3
+      max_vel_theta: 0.3       # ลดลงมานิดนึงจาก 1.0 เพื่อให้ภาพไม่เบลอตอน Re-localize
       min_vel_x: 0.0
       min_speed_xy: 0.0
-      min_speed_theta: 0.0     
+      min_speed_theta: 0.0   
       
       # ความเร่งใน DWB ควรจะ "น้อยกว่า" หรือ "เท่ากับ" Smoother
       acc_lim_x: 0.5           # ออกตัวนิ่มๆ (ลดจาก 1.0)
@@ -142,7 +142,7 @@ controller_server:
       # ==========================================================
       # [กลุ่มที่ 2: การทำนายเส้นทางและการตัดสินใจ]
       # ==========================================================
-      sim_time: 2.0      # เวลาที่หุ่นยนต์คำนวณล่วงหน้า (วินาที)
+      sim_time: 3.0      # เวลาที่หุ่นยนต์คำนวณล่วงหน้า (วินาที)
       vx_samples: 20          # จำนวนการสุ่มความเร็ว x เพื่อหาค่าที่ดีที่สุด
       vtheta_samples: 20      # จำนวนการสุ่มความเร็วการหมุน
       vy_samples: 5
@@ -159,13 +159,13 @@ controller_server:
       # [ค่าน้ำหนักการคำนวณ (Critics)]
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 1.0 #ตรวจเช็กว่าเส้นทางนั้นจะชนสิ่งกีดขวางใน Costmap
-      PathAlign.scale: 5.0 #ยิ่งค่า scale สูง หุ่นจะยิ่งพยายามบิดตัวให้หน้าตรงกับทางที่จะไป
-      PathAlign.forward_point_distance: 0.1
+      PathAlign.scale: 2.0 #ยิ่งค่า scale สูง หุ่นจะยิ่งพยายามบิดตัวให้หน้าตรงกับทางที่จะไป
+      PathAlign.forward_point_distance: 0.25
       GoalAlign.scale: 0.0 # สั่งให้หุ่นหันหน้าเข้าหาจุดเป้าหมาย (Goal) ตลอดเวลา
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 12.0 #สั่งให้หุ่นยนต์ "เกาะเส้นพาธ"
-      GoalDist.scale: 12.0 #สั่งให้หุ่นยนต์พยายามลดระยะห่างจากจุดหมายให้เร็วที่สุด
-      RotateToGoal.scale: 20.0 #บังคับให้หุ่นหมุนตัวอยู่กับที่เพื่อให้หน้าตรงกับ Goal เมื่อถึงระยะหนึ่ง
+      GoalAlign.forward_point_distance: 0.25
+      PathDist.scale: 5.0 #สั่งให้หุ่นยนต์ "เกาะเส้นพาธ"
+      GoalDist.scale: 10.0 #สั่งให้หุ่นยนต์พยายามลดระยะห่างจากจุดหมายให้เร็วที่สุด
+      RotateToGoal.scale: 10.0 #บังคับให้หุ่นหมุนตัวอยู่กับที่เพื่อให้หน้าตรงกับ Goal เมื่อถึงระยะหนึ่ง
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
@@ -176,17 +176,17 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_link
-      footprint: "[[-0.65, -0.55], [-0.65, 0.55], [0.65, 0.55], [0.65, -0.55]]"
+      footprint: "[[-0.55, -0.5], [-0.55, 0.5], [0.55, 0.5], [0.55, -0.5]]"
       use_sim_time: False
       rolling_window: true
-      width: 2
-      height: 2
+      width: 3
+      height: 3
       resolution: 0.05
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.7  # ลดค่าลง (ยิ่งน้อย ยิ่งกลัว)
-        inflation_radius: 0.3     # เพิ่มรัศมี (ยิ่งมาก ยิ่งเว้นระยะห่าง)
+        cost_scaling_factor: 3.0  # ลดค่าลง (ยิ่งน้อย ยิ่งกลัว)
+        inflation_radius: 0.2     # เพิ่มรัศมี (ยิ่งมาก ยิ่งเว้นระยะห่าง)
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -215,7 +215,7 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
-      footprint: "[[-0.65, -0.55], [-0.65, 0.55], [0.65, 0.55], [0.65, -0.55]]"
+      footprint: "[[-0.35, -0.3], [-0.35, 0.3], [0.35, 0.3], [0.35, -0.3]]"
       map_topic: /rtabmap/map
       use_sim_time: False
       resolution: 0.05
@@ -240,8 +240,8 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.7
-        inflation_radius: 0.3
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.2
 
 planner_server:
   ros__parameters:
@@ -260,8 +260,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.25, 0.0, 0.4] 
-    min_velocity: [-0.25, 0.0, -0.4] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
+    max_velocity: [0.3, 0.0, 0.3] 
+    min_velocity: [-0.3, 0.0, -0.3] # ยอมให้ถอยหลังได้เท่ากับเดินหน้า
     
     # ค่าความเร่งที่ยอมให้เกิดขึ้น (ควรมาก5ว่า DWB ประมาณ 20-50%)
     # เพื่อให้ Smoother ไม่ไปหน่วงการตัดสิน5จของ Planner จนเกินไป

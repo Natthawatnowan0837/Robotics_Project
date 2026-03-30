@@ -29,27 +29,27 @@ class OpenMapServer(Node):
         self.get_logger().info("🤖 RTAB-Map Only Server (Multi-Threaded) Ready.")
 
     def cleanup_all(self):
-        """ ล้าง Process RTAB-Map และ GUI ที่เกี่ยวข้องให้เกลี้ยง """
+        """ ล้าง Process RTAB-Map ให้เกลี้ยง แต่ไม่ฆ่า Hardware หลัก """
         self.get_logger().info("🧹 Cleaning up RTAB-Map processes...")
         
-        # 1. Kill process ที่เก็บในตัวแปร
-        if self.current_process and self.current_process.poll() is None:
+        if self.current_process:
             try:
+                # ฆ่าเฉพาะกลุ่ม process ที่เราสั่ง launch
                 pgid = os.getpgid(self.current_process.pid)
-                self.get_logger().info(f"🛑 Killing PGID: {pgid}")
                 os.killpg(pgid, signal.SIGKILL)
-                self.current_process.wait(timeout=1.0)
+                self.current_process.wait(timeout=2.0)
             except:
                 pass
 
-        # 2. กวาดล้างซากที่อาจหลงเหลือ (rtabmap, viz)
-        targets = ['rtabmap', 'rtabmap_viz', 'realsense2_camera']
+        # ฆ่าเฉพาะ RTAB-Map และ GUI (ปล่อย realsense ไว้ ถ้ามันรันจากที่อื่น)
+        targets = ['rtabmap', 'rtabmap_viz'] 
         for target in targets:
             subprocess.run(['pkill', '-9', '-f', target], stderr=subprocess.DEVNULL)
             
         self.current_process = None
         self.current_launch_id = ""
-        time.sleep(1.0) # รอให้ Hardware/Port ว่าง
+        # สำคัญมาก: รอให้ Database file คืน lock และ Port สื่อสารว่างลง
+        time.sleep(2.0)
 
     def open_map_callback(self, request, response):
         mode_val = request.mode 
@@ -84,25 +84,29 @@ class OpenMapServer(Node):
         self.cleanup_all()
 
         floor_str = f"floor{floor}"
+        # เลือกไฟล์ launch ให้ถูกโหมด
         launch_file = 'launch_mapping.launch.py' if mode_name == 'map' else 'launch_localize.launch.py'
         
+        # --- เพิ่มส่วนนี้เพื่อ Debug Path ---
+        home = os.path.expanduser('~')
+        db_path = os.path.join(home, 'Robotics_Project/src/my_manager/maps', floor_str, f"{direction}.db")
+        
+        if mode_name == 'localize' and not os.path.exists(db_path):
+            self.get_logger().error(f"❌ หาไฟล์ Database ไม่เจอที่: {db_path}")
+            # ถ้าหาไม่เจอ แผนที่ก็จะไม่ขึ้น
+        else:
+            self.get_logger().info(f"📂 กำลังใช้ Database: {db_path}")
+        # ---------------------------------
+
         try:
-            # สั่ง Launch RTAB-Map
             rtab_cmd = [
                 'ros2', 'launch', 'my_manager', launch_file,
-                f'floor:={floor_str}', f'db_name:={direction}'
+                f'floor:={floor_str}', 
+                f'db_name:={direction}'
             ]
-            self.get_logger().info(f"🚀 Launching {mode_name.upper()}...")
+            self.get_logger().info(f"🚀 Executing: {' '.join(rtab_cmd)}")
             self.current_process = subprocess.Popen(rtab_cmd, preexec_fn=os.setsid)
-            
-            # รอให้ Process เริ่มต้นได้จริง (Check poll)
-            time.sleep(3.0) 
-            if self.current_process.poll() is None:
-                self.get_logger().info("✅ RTAB-Map process started successfully.")
-                return True
-            else:
-                return False
-
+            return True
         except Exception as e:
             self.get_logger().error(f"❌ Launch Error: {e}")
             return False

@@ -38,21 +38,21 @@ def generate_launch_description():
     # --- 2. Included Launch Files ---
     
     # Realsense
-    realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
-        )]),
-        launch_arguments={
-            'depth_module.profile': '640,480,15',
-            'rgb_module.profile': '640,480,15',
-            'pointcloud.enable': 'true',
-            'align_depth.enable': 'true',
-            'enable_gyro': 'true',
-            'enable_accel': 'true',
-            'unite_imu_method': '2',
-            'enable_sync': 'true',
-        }.items()
-    )
+    # realsense = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource([os.path.join(
+    #         get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
+    #     )]),
+    #     launch_arguments={
+    #         'depth_module.profile': '640,480,15',
+    #         'rgb_module.profile': '640,480,15',
+    #         'pointcloud.enable': 'true',
+    #         'align_depth.enable': 'true',
+    #         'enable_gyro': 'true',
+    #         'enable_accel': 'true',
+    #         'unite_imu_method': '2',
+    #         'enable_sync': 'true',
+    #     }.items()
+    # )
 
     # Robot State Publisher
     rsp = IncludeLaunchDescription(
@@ -93,17 +93,17 @@ def generate_launch_description():
                 '--Rtabmap/DetectionRate 1 '
             ],
             'approx_sync': 'true',
-            'approx_sync_max_interval': '0.05',
-            'frame_id': 'base_link',
+            'approx_sync_max_interval': '0.1',
+            'frame_id': 'base_footprint',
             'rgb_topic': '/camera/camera/color/image_raw',
             'depth_topic': '/camera/camera/aligned_depth_to_color/image_raw',
             'camera_info_topic': '/camera/camera/color/camera_info',
             'tag_topic': '/detections',            
-            'odom_topic': '/odometry/filtered',   
+            'odom_topic': '/odom/filtered',   
             'imu_topic': '/imu/data_standard',
             'odom_frame_id': 'odom',
             'publish_tf_map': 'true',
-            'wait_imu_to_init': 'true',
+            'wait_imu_to_init': 'false',
             'qos': '1',
             'rviz': 'true',
             'rviz_cfg': rviz_config_path,
@@ -115,8 +115,8 @@ def generate_launch_description():
         floor_arg,
         db_name_arg,
         
-        # รัน Node พื้นฐานทันที
-        realsense,
+        # # รัน Node พื้นฐานทันที
+        # realsense,
         rsp,
         node_joint_state_publisher,
         

@@ -1,13 +1,13 @@
 ekf_filter_node:
   ros__parameters:
-    frequency: 30.0
+    frequency: 45.0
     sensor_timeout: 0.1
     two_d_mode: true        # บังคับให้คำนวณเฉพาะในระนาบ 2D (X, Y, Yaw)
     publish_tf: true
 
     map_frame: map
     odom_frame: odom
-    base_link_frame: base_link
+    base_link_frame: base_footprint
     world_frame: odom
 
     # 1. ข้อมูลจาก Encoder (Wheel Odometry)

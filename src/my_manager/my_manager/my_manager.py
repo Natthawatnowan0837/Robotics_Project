@@ -49,8 +49,7 @@ class StateManagerNode(Node):
 
         # --- Publishers & Subscriptions ---
         self.sub_room = self.create_subscription(String, '/room_target', self.room_callback, 10)
-        self.pub_current_state = self.create_publisher(String, '/robot_current_state', 10)
-        
+        self.pub_process = self.create_publisher(String, '/process', 10)
         # --- Service Clients ---
         self.cli_floor = self.create_client(CheckFloor, 'check_floor_service')
         self.cli_open_map = self.create_client(OpenMap, 'open_map_service')
@@ -60,15 +59,21 @@ class StateManagerNode(Node):
         self.cli_goal = self.create_client(Goal, 'Goal_service')
         self.cli_stair = self.create_client(GotoStair, 'goto_stair_service')
         self.cli_controller = self.create_client(Controller, 'controller_service')
-        
-        self.create_timer(0.5, self.publish_state)
+
+        self.create_timer(0.5, self.publish_all_status)
         self.timer = self.create_timer(1.0, self.state_machine_control)
         
         self.get_logger().info("🤖 State Manager Ready. State 'Goal' updated.")
 
+    def publish_all_status(self):
+        # สร้าง Message สำหรับ Topic 'process'
+        process_msg = String()
+        process_msg.data = f"Current Process: {self.current_state.name}"
+        self.pub_process.publish(process_msg)
+
     # --- Subprocess Management ---
     def execute_fusion_launch(self):
-        cmd = "ros2 launch my_fusion fusion_launch.py"
+        cmd = "ros2 launch my_fusion fusion_launch.py "
         try:
             self.get_logger().info(f"🚀 Launching Fusion: {cmd}")
             self.launch_process = subprocess.Popen(
@@ -83,15 +88,18 @@ class StateManagerNode(Node):
     def terminate_launch_file(self):
         if self.launch_process:
             try:
+                # ส่งสัญญาณ Terminate ไปยังกลุ่ม Process ของ Fusion (RTAB-Map/EKF)
                 pgid = os.getpgid(self.launch_process.pid)
                 os.killpg(pgid, signal.SIGTERM)
-                time.sleep(1.0)
-                os.killpg(pgid, signal.SIGKILL)
-                self.launch_process.wait(timeout=1)
+                self.launch_process.wait(timeout=2)
             except: pass
             self.launch_process = None
-        os.system("pkill -9 -f my_fusion")
-        os.system("pkill -9 -f micro_ros_agent")
+
+        # 🧹 ล้างเฉพาะ RTAB-Map และ Nav2 แต่ "ไม่ล้าง" Realsense
+        os.system("pkill -9 -f rtabmap")
+        os.system("pkill -9 -f nav2") 
+        # os.system("pkill -9 -f micro_ros_agent") # ถ้าหุ่นเดินอยู่ ห้ามฆ่า Agent ครับ ล้อจะค้าง!
+        self.get_logger().info("🧹 Fusion Cleared. Camera is still alive.")
 
     # --- Data & Callback ---
     def read_command(self):
@@ -128,11 +136,15 @@ class StateManagerNode(Node):
 
         if self.current_state == RobotState.SETUP:
             if not self.service_called:
-                self.terminate_launch_file()
+                # เอา self.terminate_launch_file() ออกตามที่ต้องการ
+                # เพื่อให้ State นี้ทำหน้าที่แค่ "เริ่ม" (Launch) เท่านั้น
                 if self.execute_fusion_launch():
                     self.service_called = True
+                    # สร้าง Timer เพื่อรอให้ระบบ Fusion (RTAB-Map/EKF) ตั้งตัวได้ 5 วินาที
                     self.setup_timer = self.create_timer(5.0, self.finish_setup_callback)
-                else: self.reset_to_idle()
+                else: 
+                    self.get_logger().error("❌ Failed to execute fusion launch")
+                    self.reset_to_idle()
 
         elif self.current_state == RobotState.CHECK_FLOOR:
             if not self.service_called:
@@ -217,9 +229,37 @@ class StateManagerNode(Node):
 
     def open_map_response_callback(self, future):
         try:
-            self.current_state = RobotState.CHECK_LOCALIZE if future.result().status == "success" else RobotState.IDLE
+            res = future.result()
+            if res.status == "success":
+                self.get_logger().info("🗺️ Map Service Started! Waiting 7s for stability...")
+                
+                # เปลี่ยนเป็น IDLE ชั่วคราวเพื่อหยุด State Machine ไม่ให้รันต่อ
+                self.current_state = RobotState.IDLE 
+                
+                # สร้าง Timer เพื่อรอให้ระบบ Sensor และ Map พร้อมจริงๆ
+                if hasattr(self, 'wait_timer') and self.wait_timer:
+                    self.wait_timer.cancel()
+                self.wait_timer = self.create_timer(7.0, self.confirm_ready_to_localize)
+            else:
+                self.get_logger().error("❌ OpenMap Failed")
+                self.reset_to_idle()
             self.service_called = False
-        except: self.reset_to_idle()
+        except Exception as e:
+            self.get_logger().error(f"❌ Error in OpenMap Callback: {e}")
+            self.reset_to_idle()
+
+    def confirm_ready_to_localize(self):
+        """ ฟังก์ชันนี้จะถูกเรียกหลังผ่านไป 7 วินาที """
+        self.wait_timer.cancel()
+        self.get_logger().info("🚀 Systems Stable. Now starting CHECK_LOCALIZE...")
+        self.current_state = RobotState.CHECK_LOCALIZE
+        self.service_called = False # ปลดล็อกเพื่อให้เข้าสู่ State ถัดไป
+
+    def wait_for_rtabmap_ready(self):
+        self.timer_map.cancel() # หยุดตัวนับเวลา
+        self.get_logger().info("🚀 RTAB-Map should be ready now. Starting Localize...")
+        self.current_state = RobotState.CHECK_LOCALIZE # ค่อยเริ่ม Localize ตรงนี้
+        self.service_called = False
 
     def localize_response_callback(self, future):
         try:
@@ -228,16 +268,29 @@ class StateManagerNode(Node):
         except: self.reset_to_idle()
 
     def position_response_callback(self, future):
-        try:
-            res = future.result()
-            if self.default_way != res.update_way:
-                self.default_way = res.update_way
-                new_coords = self.target_data.get(self.default_way, [0.0, 0.0])
-                self.goal_coords = [float(new_coords[0]), float(new_coords[1])]
-                self.current_state = RobotState.CHECK_FLOOR 
-            else: self.current_state = RobotState.NAV2 # เปลี่ยนจาก Goal เป็น GOAL
-            self.service_called = False
-        except: self.reset_to_idle()
+            try:
+                res = future.result()
+                if self.default_way != res.update_way:
+                    # --- [ เพิ่มตรงนี้ ] ---
+                    # สั่งหยุดระบบ Localize เดิมก่อนจะไป SETUP ใหม่
+                    stop_loc_req = CheckLocalize.Request()
+                    stop_loc_req.active = False
+                    self.cli_localize.call_async(stop_loc_req) 
+                    self.get_logger().info("🛑 Deactivating Localize before Setup...")
+                    # ----------------------
+
+                    self.default_way = res.update_way
+                    new_coords = self.target_data.get(self.default_way, [0.0, 0.0])
+                    self.goal_coords = [float(new_coords[0]), float(new_coords[1])]
+                    
+                    self.current_state = RobotState.SETUP 
+                else: 
+                    self.current_state = RobotState.NAV2
+                
+                self.service_called = False
+            except Exception as e:
+                self.get_logger().error(f"Error in position callback: {e}")
+                self.reset_to_idle()
 
     def nav2_response_callback(self, future):
         try:
@@ -255,8 +308,18 @@ class StateManagerNode(Node):
 
                 # เช็ค success (หุ่นยนต์เดินถึงที่หมาย)
                 if response.success:
-                    self.get_logger().info("🏁 Destination Reached! Moving to next state.")
-                    self.current_state = RobotState.GoToStair if self.floor_status != "same_floor" else RobotState.IDLE
+                    self.get_logger().info("🏁 Destination Reached! Checking next step...")
+                    
+                    # เงื่อนไข: ถ้า floor_status เป็น "Up" ให้ไปที่ GoToStair
+                    if self.floor_status == "Up":
+                        self.get_logger().info("🪜 Floor status is 'Up'. Moving to GoToStair.")
+                        self.current_state = RobotState.GoToStair
+                    else:
+                        # ถ้าเป็น same_floor หรือ Down หรืออื่นๆ ให้จบภารกิจ
+                        self.get_logger().info(f"✅ Mission Finished (Status: {self.floor_status}). Resetting to IDLE.")
+                        self.current_state = RobotState.IDLE
+                
+                # ปลดล็อกเพื่อให้ State Machine ทำงานในรอบถัดไปได้
                     self.service_called = False
                 else:
                     self.get_logger().error("❌ Navigation Failed.")
@@ -275,10 +338,26 @@ class StateManagerNode(Node):
 
     def controller_response_callback(self, future):
         try:
-            if future.result().success: self.current_state = RobotState.CHECK_FLOOR
-            else: self.reset_to_idle()
+            res = future.result()
+            if res.success:
+                self.get_logger().info("✅ Climbing finished. Deactivating Localize and Resetting Setup...")
+                
+                # 1. สั่งหยุดระบบ Localize ทันที (ส่ง active: False)
+                stop_loc_req = CheckLocalize.Request()
+                stop_loc_req.active = False
+                self.cli_localize.call_async(stop_loc_req)
+                
+                # 2. เปลี่ยนสถานะกลับไป SETUP เพื่อเริ่มกระบวนการของชั้นใหม่
+                self.current_state = RobotState.SETUP
+                
+            else:
+                self.get_logger().error("❌ Controller failed.")
+                self.reset_to_idle()
+                
             self.service_called = False
-        except: self.reset_to_idle()
+        except Exception as e:
+            self.get_logger().error(f"❌ Exception in controller callback: {e}")
+            self.reset_to_idle()
 
     def reset_to_idle(self):
         self.get_logger().info("💤 Mission Finished or Error. Resetting.")
