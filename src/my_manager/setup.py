@@ -44,15 +44,14 @@ setup(
         'console_scripts': [
             'esp32_manager = my_manager.esp32_manager:main',
             'my_manager = my_manager.my_manager:main',
+            'nav_goal = my_manager.nav_goal:main',
             'check_floor = my_manager.check_floor:main',
             'check_localize = my_manager.check_localize:main',
             'check_position = my_manager.check_position:main',
             'open_map = my_manager.open_map:main',
             'rotation_control = my_manager.rotation_control:main',
-            'goal = my_manager.goal:main',
-            'nav2 = my_manager.nav2:main',
             'go_to_stair = my_manager.go_to_stair:main',
-            'controller = my_manager.controller:main'
+            "controller = my_manager.controller:main",
         ],
     },
 )

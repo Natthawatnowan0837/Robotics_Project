@@ -6,39 +6,9 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 def generate_launch_description():
-
-    realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py'
-        )]),
-        launch_arguments={
-            'depth_module.profile': '640,480,15',
-            'rgb_module.profile': '640,480,15',
-            'pointcloud.enable': 'true',
-            'align_depth.enable': 'true',
-            'enable_gyro': 'true',
-            'enable_accel': 'true',
-            'unite_imu_method': '2',
-            'enable_sync': 'true',
-        }.items()
-    )
-
-    config_path = os.path.join(
-        get_package_share_directory('my_manager'), # เปลี่ยนเป็นชื่อ package คุณ
-        'config',
-        'twist_mux.yaml'
-    )
-
-    twist_mux_node = Node(
-        package='twist_mux',
-        executable='twist_mux',
-        name='twist_mux',
-        parameters=[config_path],
-        remappings=[('/cmd_vel_out', '/cmd_vel')] # ส่ง Output ออกไปที่หุ่นยนต์จริง
-    )
-
     package_name = 'my_fusion'
 
+    # 1. โหนดจัดการการเชื่อมต่อ ESP32
     esp32_manager_node = Node(
         package='my_manager',
         executable='esp32_manager',
@@ -46,7 +16,7 @@ def generate_launch_description():
         output='screen'
     )
 
-
+    # 2. โหนดแปลงค่า Encoder เป็น Odometry
     encoders_node = Node(
         package=package_name,
         executable='encoder_to_odom',
@@ -54,7 +24,7 @@ def generate_launch_description():
         output='screen'
     )
     
-    # 2. โหนดรับค่า IMU จาก ESP32
+    # 3. โหนดรับค่า IMU จาก ESP32
     imu_node = Node(
         package=package_name,
         executable='imu_bridge',
@@ -62,19 +32,23 @@ def generate_launch_description():
         output='screen'
     )
 
-    pkg_share = get_package_share_directory('my_fusion')
-    ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
+    # 4. ดึง EKF Launch (Extended Kalman Filter)
+    ekf_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory(package_name), 'launch', 'ekf_launch.py'
+        )]), 
+        launch_arguments={'use_sim_time': 'false'}.items()
+    )
 
-        # รันโหนด EKF        
-    ekf = Node(
-            package='robot_localization',
-            executable='ekf_node',
-            name='ekf_filter_node',
-            output='screen',
-            parameters=[ekf_config_path],
-            remappings=[('/odometry/filtered', '/odom/filtered')] 
-        )
+    # 5. ดึง Odom Launch
+    odom_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory(package_name), 'launch', 'odom_launch.py'
+        )]), 
+        launch_arguments={'use_sim_time': 'false'}.items()
+    )
 
+    # 6. โหนดควบคุม PID
     pid_node = Node(
         package='my_control',
         executable='pid_parameters',
@@ -84,11 +58,10 @@ def generate_launch_description():
 
     # --- ส่งโหนดทั้งหมดออกไปรัน ---
     return LaunchDescription([
-        realsense,
         esp32_manager_node,
         encoders_node,
         imu_node,
-        ekf,
-        pid_node,
-        twist_mux_node
+        odom_launch,  # <--- เติมจุลภาคตรงนี้
+        ekf_launch,   # <--- เติมจุลภาคตรงนี้
+        pid_node      # <--- เติมจุลภาคตรงนี้
     ])

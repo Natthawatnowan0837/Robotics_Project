@@ -34,7 +34,7 @@ setup(
             'depth_to_pointclound = my_detection_stair.depth_to_pointclound:main',
             'train_model = my_detection_stair.train_model:main',
             'test_model = my_detection_stair.test_model:main',
-            'detect_stair = my_detection_stair.detect_stair:main',
+            'go_to_stair = my_detection_stair.go_to_stair:main ',
         ],
     },
 )

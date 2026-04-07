@@ -26,9 +26,11 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'mic_checker = my_voice_control.mic_checking:main',
             'vad_to_wav = my_voice_control.vad_to_wav:main',
             'wav_to_text = my_voice_control.wav_to_text:main',
             'voice_speaking = my_voice_control.voice_speaking:main',
+            'gui = my_voice_control.gui:main', 
         ],
     },
 )

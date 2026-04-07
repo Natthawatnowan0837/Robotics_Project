@@ -32,15 +32,15 @@ class Go_to_stair(Node):
         # ==========================================
         # 🛠 ส่วนปรับจูนค่าตัวแปร (CONFIG PARAMETERS)
         # ==========================================
-        self.target_dist      = 0.50   
-        self.min_vel          = 0.15   
+        self.target_dist      = 0.45   
+        self.min_vel          = 0.3   
         self.max_vel          = 0.5   
-        self.min_angular      = 0.15   
+        self.min_angular      = 0.2   
         self.max_angular      = 0.5   
         self.angle_tolerance  = 20.0  
-        self.search_ang_vel   = -0.7   
+        self.search_ang_vel   = 0.7   
         
-        self.conf_threshold   = 97.5  # ปรับลดลงเล็กน้อยเพื่อความเสถียร (แนะนำ 90-95)
+        self.conf_threshold   = 98.0  # ปรับลดลงเล็กน้อยเพื่อความเสถียร (แนะนำ 90-95)
         self.max_range        = 4.5   
         self.ransac_iters     = 100   
         self.plane_thickness  = 0.04 
