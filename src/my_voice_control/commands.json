@@ -78,15 +78,15 @@
       "commands": ["ขึ้นบันไดหนึ่ง", "ขึ้นบันได1", "Up stair 1"],
       "response": "Up_Stair1",
       "floor": 1,
-      "go": [9.0, 0.0],
-      "back": [6.0, 0.0]
+      "go": [5.2, -0.7],
+      "back": [19.4, -0.05]
     },
     "Up_Stair2": {
       "commands": ["ขึ้นบันไดสอง", "ขึ้นบันได2", "Up stair 2"],
       "response": "Up_Stair2",
       "floor": 2,
-      "go": [5.0, 0.2],
-      "back": [20, 0.1]
+      "go": [5.2, -0.8],
+      "back": [19.5, 0.0]
     },
     "Up_Stair3": {
       "commands": ["ขึ้นบันไดสาม", "ขึ้นบันได3", "Up stair 3"],

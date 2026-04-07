@@ -185,8 +185,8 @@ local_costmap:
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0  # ลดค่าลง (ยิ่งน้อย ยิ่งกลัว)
-        inflation_radius: 0.2     # เพิ่มรัศมี (ยิ่งมาก ยิ่งเว้นระยะห่าง)
+        cost_scaling_factor: 2.0  # ลดค่าลง (ยิ่งน้อย ยิ่งกลัว)
+        inflation_radius: 0.25     # เพิ่มรัศมี (ยิ่งมาก ยิ่งเว้นระยะห่าง)
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -240,8 +240,8 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.2
+        cost_scaling_factor: 2.0
+        inflation_radius: 0.25
 
 planner_server:
   ros__parameters:

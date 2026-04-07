@@ -79,7 +79,8 @@ def generate_launch_description():
         package='my_manager',
         executable='go_to_stair',
         name='goto_stair_node',
-        output='screen'
+        output='screen',
+        arguments=['--ros-args', '--log-level', 'info'] # โชว์ Log ละเอียดปกติ
     )
 
     # Node สำหรับ Keyboard Controller (ที่รับ Service)

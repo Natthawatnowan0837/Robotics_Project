@@ -34,7 +34,7 @@ class StateManagerNode(Node):
         self.floor_status = "same_floor"
         self.mode = ['map', 'localize']
         self.way = ['go', 'back']
-        self.default_way = self.way[1] 
+        self.default_way = self.way[0] 
         
         self.goal_coords = [0.0, 0.0] # เปลี่ยนชื่อตัวแปรเล็กน้อยเพื่อไม่ให้ซ้ำกับชื่อ State       
         self.floor = 0
@@ -141,7 +141,7 @@ class StateManagerNode(Node):
                 if self.execute_fusion_launch():
                     self.service_called = True
                     # สร้าง Timer เพื่อรอให้ระบบ Fusion (RTAB-Map/EKF) ตั้งตัวได้ 5 วินาที
-                    self.setup_timer = self.create_timer(5.0, self.finish_setup_callback)
+                    self.setup_timer = self.create_timer(10.0, self.finish_setup_callback)
                 else: 
                     self.get_logger().error("❌ Failed to execute fusion launch")
                     self.reset_to_idle()
